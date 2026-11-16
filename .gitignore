@@ -1,0 +1,48 @@
+# Unity-generated caches and local state
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Build outputs
+/[Bb]uild/
+/[Bb]uilds/
+*.apk
+*.aab
+*.unitypackage
+
+# IDE-generated files
+/.vs/
+/.idea/
+/.vscode/
+.gradle/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.opendb
+*.VC.db
+*.csproj.meta
+*.pidb.meta
+*.pdb.meta
+
+# Unity crash reports and captures
+sysinfo.txt
+crashlytics-build.properties
+*.stackdump
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keep Assets and their .meta files, Packages (including packages-lock.json),
+# and ProjectSettings under version control. Do not ignore them.

@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 99ef4543e03ed6e4682fd38fc55a2484, type: 3}
+  m_Name: ArtworkCatalog
+  m_EditorClassIdentifier: VirtualMuseum::VirtualMuseum.ArtworkCatalog
+  definitions:
+  - id: sample-artwork-1
+    title: The Block
+    description: A primitive study for the Virtual Museum student project.
+    prefab: {fileID: 8018038572962199529, guid: f449029bf30112142bf5a688913ad9b5, type: 3}
+    artist: Student Collection
+    year: 
+  - id: sample-artwork-2
+    title: Orb
+    description: A primitive study for the Virtual Museum student project.
+    prefab: {fileID: 5110368543553893180, guid: 62e0e2bdc7b22034b928d08161bc2fc7, type: 3}
+    artist: Student Collection
+    year: 
+  - id: sample-artwork-3
+    title: Standing Form
+    description: A primitive study for the Virtual Museum student project.
+    prefab: {fileID: 3634883170165340559, guid: 4bb22cf18a179b74baf3f1e1c88c80b6, type: 3}
+    artist: Student Collection
+    year: 
+  - id: sample-artwork-4
+    title: Column
+    description: A primitive study for the Virtual Museum student project.
+    prefab: {fileID: 4386520537719964431, guid: 416af6d6f0c91d146b95ce01f6d58ed7, type: 3}
+    artist: Student Collection
+    year: 
+  - id: sample-artwork-5
+    title: Study in Planes
+    description: A primitive study for the Virtual Museum student project.
+    prefab: {fileID: 1824386199870142540, guid: a443dfb736d41e54db1d0e44f43a0fcf, type: 3}
+    artist: Student Collection
+    year: 
+  - id: sample-artwork-6
+    title: Small World
+    description: A primitive study for the Virtual Museum student project.
+    prefab: {fileID: 3516209162594468333, guid: db35b1561017ac748a8a50c1c7077b8f, type: 3}
+    artist: Student Collection
+    year: 

@@ -1,0 +1,6 @@
+{
+  "name": "VirtualMuseum.Editor",
+  "rootNamespace": "VirtualMuseum.Editor",
+  "references": ["VirtualMuseum"],
+  "includePlatforms": ["Editor"]
+}
