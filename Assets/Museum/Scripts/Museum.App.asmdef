@@ -1,0 +1,5 @@
+{
+  "name": "Museum.App",
+  "rootNamespace": "VirtualMuseum.App",
+  "references": ["VirtualMuseum", "Unity.XR.Interaction.Toolkit", "Unity.InputSystem"]
+}

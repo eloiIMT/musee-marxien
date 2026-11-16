@@ -1,0 +1,7 @@
+{
+  "name": "Museum.App.Tests.Editor",
+  "rootNamespace": "VirtualMuseum.App.Tests",
+  "references": ["VirtualMuseum", "Museum.App"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"]
+}
