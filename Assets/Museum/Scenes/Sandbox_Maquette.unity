@@ -155,6 +155,7 @@ Transform:
   - {fileID: 1339583702}
   - {fileID: 904665164}
   - {fileID: 58947363}
+  - {fileID: 1553283243}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &58947362
@@ -831,6 +832,135 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: f6336ac4ac8b4d34bc5072418cdc62a0, type: 3}
+--- !u!1 &1059109474
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1059109477}
+  - component: {fileID: 1059109476}
+  - component: {fileID: 1059109475}
+  m_Layer: 0
+  m_Name: Visitor Mode
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1059109475
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1059109474}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 87fc0ba0abfaa5343b16a03bc913b883, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.VisitorGuide
+--- !u!114 &1059109476
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1059109474}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c8d4d8d4f94a1b44ae469c67bcfc3b0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.VisitorMode
+  backend: {fileID: 819444226}
+  immersive: {fileID: 630652819}
+  organizerObjects:
+  - {fileID: 4265462}
+  - {fileID: 2087980016}
+  visitorObjects:
+  - {fileID: 1981883466}
+  roomPlan: {fileID: 1981883467}
+  overlayMaterial: {fileID: 2100000, guid: 0d75ab1f45ca28a44a5abd0d24eeb215, type: 2}
+  worldTextMaterial: {fileID: 2100000, guid: ca2e39e5d5da4cf4d90c644384a6d299, type: 2}
+  uiMaterial: {fileID: 2100000, guid: e14d1b55109a07542aec1b3066fc340f, type: 2}
+  visitorMoveSpeed: 1.4
+  fadeOut: 0.45
+  fadeIn: 0.5
+  blackTime: 0.3
+  roomFade: 0.18
+--- !u!4 &1059109477
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1059109474}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1062174401
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1062174403}
+  - component: {fileID: 1062174402}
+  m_Layer: 0
+  m_Name: Plan Miniature
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1062174402
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1062174401}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f30b465878fcc754b94135bc40efb5b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.MuseumView
+  backend: {fileID: 819444226}
+  floorMaterial: {fileID: 2100000, guid: 1a10bffa194d98a448e030a8c75bb970, type: 2}
+  wallMaterial: {fileID: 2100000, guid: 287427387f3412946b8908d348578813, type: 2}
+  cableMaterial: {fileID: 2100000, guid: 88df9319ff2646e4c87a070b1e637157, type: 2}
+  wallThickness: 0.1
+  lowWallHeight: 0.3
+  startExpanded: 0
+  wallColliders: 0
+  labelHeight: 0.03
+  showArtworkWarnings: 0
+  cableWidth: 0.35
+  cableHeight: 0.2
+--- !u!4 &1062174403
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1062174401}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1981883468}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1195257469
 GameObject:
   m_ObjectHideFlags: 0
@@ -1074,6 +1204,51 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &1553283242
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1553283243}
+  - component: {fileID: 1553283244}
+  m_Layer: 0
+  m_Name: Visitor Teleport Button
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1553283243
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1553283242}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.85, y: 0.85, z: -0.05}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4265463}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1553283244
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1553283242}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d84cb88c0b5a1d844bd4b7ff291de10b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.VisitorTeleportButton
+  mode: {fileID: 1059109476}
 --- !u!1 &1919639230
 GameObject:
   m_ObjectHideFlags: 0
@@ -1185,6 +1360,53 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4265463}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1981883466
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1981883468}
+  - component: {fileID: 1981883467}
+  m_Layer: 0
+  m_Name: Visitor Room Plan
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1981883467
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1981883466}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9ae8409617a0a94aad115724aa4307b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.RoomPlan
+  mode: {fileID: 1059109476}
+  miniature: {fileID: 1062174402}
+--- !u!4 &1981883468
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1981883466}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1062174403}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2087980016
 GameObject:
@@ -1308,3 +1530,5 @@ SceneRoots:
   - {fileID: 4265463}
   - {fileID: 2087980020}
   - {fileID: 1057243093}
+  - {fileID: 1981883468}
+  - {fileID: 1059109477}
