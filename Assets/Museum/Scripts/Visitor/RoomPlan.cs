@@ -1,0 +1,264 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace VirtualMuseum.App
+{
+    /// <summary>
+    /// Wall plan of the room the visitor is in ("you are here" map). One instance, moved to the current room's wall
+    /// on each room change, so every room has its plan. It shows the SAME miniature as the organizer's board
+    /// (a <see cref="MuseumView"/> on the same data), which links the two representations, but turned
+    /// "forward-up": the direction the user faces when looking at the plan is up on the plan (no mental rotation).
+    ///  - red arrow = user position and heading, blue room = here;
+    ///  - green rooms = connected: TRIGGER on one = go there (short fade, arrival facing the room we come from);
+    ///    grey rooms = not connected (refused);
+    ///  - button below = back to the workshop.
+    /// </summary>
+    public class RoomPlan : MonoBehaviour
+    {
+        const float BoardWidth = 0.95f, BoardHeight = 0.72f, BoardCenterY = 1.45f, WallHalfThickness = 0.05f;
+        static readonly Color HereColor = new Color(0.5f, 0.8f, 1f);
+        static readonly Color ConnectedColor = new Color(0.62f, 1f, 0.66f);
+        static readonly Color HoverColor = new Color(0.8f, 1f, 0.82f);
+        static readonly Color FarColor = new Color(0.32f, 0.33f, 0.35f);
+
+        [SerializeField] VisitorMode mode;
+        [Tooltip("Miniature MuseumView child (plan walls, no wall colliders).")]
+        [SerializeField] MuseumView miniature;
+
+        VisitorGuide Guide => mode.Guide;
+        public Vector3 BoardWorldPosition => transform.position;
+
+        Transform board, marker, markerDot;
+        TextMesh title, status;
+        string roomId, hoveredId;
+        float scale = 0.03f;
+        readonly HashSet<RoomView> wired = new();
+
+        void Awake()
+        {
+            if (mode == null) mode = FindAnyObjectByType<VisitorMode>();
+            board = UiKit.Plate(transform, "Board", new Vector3(0, 0, 0.012f), new Vector3(BoardWidth, BoardHeight, 0.02f), new Color(0.16f, 0.17f, 0.2f));
+            title = UiKit.Text(transform, "", new Vector3(0, BoardHeight / 2f + 0.075f, -0.01f), 0.045f, Color.black, TextAnchor.MiddleCenter, TextAlignment.Center);
+            UiKit.Plate(transform, "Title Plate", new Vector3(0, BoardHeight / 2f + 0.075f, 0.002f), new Vector3(BoardWidth, 0.09f, 0.01f), UiKit.PanelColor);
+            title.color = Color.white;
+            status = UiKit.Text(transform, "", new Vector3(0, -BoardHeight / 2f - 0.03f, -0.01f), 0.026f, Color.white, TextAnchor.UpperCenter, TextAlignment.Center);
+            UiKit.Plate(transform, "Status Plate", new Vector3(0, -BoardHeight / 2f - 0.075f, 0.002f), new Vector3(BoardWidth, 0.11f, 0.01f), UiKit.PanelColor);
+            var back = UiButton.Create(transform, "Retour à l'atelier", new Vector3(0, -BoardHeight / 2f - 0.2f, -0.01f),
+                                       new Vector2(0.34f, 0.075f), new Color(0.85f, 0.45f, 0.2f), 0.03f);
+            back.Clicked += () => mode.ExitToOrganizer();
+
+            if (miniature == null) miniature = GetComponentInChildren<MuseumView>(true);
+            marker = new GameObject("You Are Here").transform;
+            marker.SetParent(miniature.transform, false);
+            UiKit.Arrow(marker, "Heading", 1f, new Color(1f, 0.2f, 0.2f)).localPosition = new Vector3(0, 0, 0.35f);
+            markerDot = UiKit.Plate(marker, "Dot", Vector3.zero, new Vector3(0.45f, 0.05f, 0.45f), new Color(1f, 0.2f, 0.2f));
+        }
+
+        void OnEnable()
+        {
+            if (mode == null || mode.Guide == null) return;
+            Guide.RoomChanged += OnRoomChanged;
+            Guide.StateChanged += OnStateChanged;
+            miniature.Refreshed += OnMiniatureRefreshed;
+            OnMiniatureRefreshed();
+            Place(Guide.CurrentRoomId);
+        }
+
+        void OnDisable()
+        {
+            if (mode == null || mode.Guide == null) return;
+            Guide.RoomChanged -= OnRoomChanged;
+            Guide.StateChanged -= OnStateChanged;
+            if (miniature != null) miniature.Refreshed -= OnMiniatureRefreshed;
+            hoveredId = null;
+        }
+
+        void OnRoomChanged(string id) => Place(id);
+        void OnStateChanged() { if (roomId != Guide.CurrentRoomId || roomId == null) Place(Guide.CurrentRoomId); else { Fit(); UpdateVisuals(); } }
+
+        // ---------------------------------------------------------------- placement on a wall
+
+        /// <summary>
+        /// Wall of a room that holds the plan: the one with fewest artworks around its middle, preferring long walls.
+        /// Returns the museum-space point at the middle of the wall's inner face (floor level), its outward normal and length.
+        /// </summary>
+        public static (Vector3 centre, Vector3 normal, float length) ChooseWall(Room room, Museum museum)
+        {
+            var walls = new[]
+            {
+                (n: Vector3.back, half: room.length / 2f, len: room.width),
+                (n: Vector3.forward, half: room.length / 2f, len: room.width),
+                (n: Vector3.left, half: room.width / 2f, len: room.length),
+                (n: Vector3.right, half: room.width / 2f, len: room.length),
+            };
+            int best = 0;
+            float bestScore = float.MaxValue;
+            for (int i = 0; i < walls.Length; i++)
+            {
+                var (n, half, len) = walls[i];
+                float score = len < 1.6f ? 100f : 0f;
+                foreach (var a in museum.artworks)
+                {
+                    if (a.roomId != room.id) continue;
+                    float toWall = half - Vector3.Dot(a.localPosition, n);              // distance from the wall plane
+                    float along = Vector3.Dot(a.localPosition, Vector3.Cross(Vector3.up, n)); // offset along the wall
+                    if (toWall < 1.2f && Mathf.Abs(along) < 0.9f) score += 1f;
+                }
+                score -= len * 0.01f; // tie-break: the longest wall
+                if (score < bestScore) { bestScore = score; best = i; }
+            }
+            var w = walls[best];
+            var local = w.n * (w.half - WallHalfThickness);
+            return (MuseumSpatial.ToMuseum(room, local), room.rotation * w.n, w.len);
+        }
+
+        void Place(string id)
+        {
+            roomId = id;
+            var room = Guide.GetRoom(id);
+            if (room == null) { board.gameObject.SetActive(false); return; }
+            board.gameObject.SetActive(true);
+
+            var root = mode.Immersive.transform;
+            var (centre, normal, length) = ChooseWall(room, Guide.Data);
+            var outward = root.TransformDirection(normal);
+            outward.y = 0;
+            var rot = Quaternion.LookRotation(outward.normalized, Vector3.up);
+            transform.SetPositionAndRotation(root.TransformPoint(centre) + Vector3.up * BoardCenterY - outward.normalized * 0.03f, rot);
+            Fit();
+            UpdateVisuals();
+        }
+
+        /// <summary>Scale and turn the miniature so the whole museum fits on the board, "forward-up".</summary>
+        void Fit()
+        {
+            var data = Guide.Data;
+            var room = Guide.GetRoom(roomId);
+            if (data == null || room == null || data.rooms.Count == 0) return;
+
+            // Museum direction the user faces when looking at the plan = outward normal of the wall.
+            var (_, normal, _) = ChooseWall(room, data);
+            float theta = Mathf.Atan2(normal.x, normal.z) * Mathf.Rad2Deg;
+            var unturn = Quaternion.Euler(0, -theta, 0);
+
+            bool any = false;
+            Vector2 min = default, max = default;
+            foreach (var r in data.rooms)
+                foreach (var c in MuseumGeometry.Corners(r.position, MuseumGeometry.Yaw(r.rotation), r.width, r.length))
+                {
+                    var p = unturn * new Vector3(c.x, 0, c.y);
+                    var q = new Vector2(p.x, p.z);
+                    if (!any) { min = max = q; any = true; }
+                    else { min = Vector2.Min(min, q); max = Vector2.Max(max, q); }
+                }
+            var size = max - min;
+            scale = Mathf.Clamp(Mathf.Min((BoardWidth - 0.1f) / Mathf.Max(size.x, 0.1f), (BoardHeight - 0.1f) / Mathf.Max(size.y, 0.1f)), 0.004f, 0.08f);
+            var centreTurned = (min + max) / 2f;
+            var centreMuseum = Quaternion.Euler(0, theta, 0) * new Vector3(centreTurned.x, 0, centreTurned.y);
+
+            // Museum up (Y) -> towards the user (-Z of the plan); the faced museum direction -> plan up.
+            var localRot = Quaternion.LookRotation(Vector3.up, Vector3.back) * Quaternion.Euler(0, -theta, 0);
+            var t = miniature.transform;
+            t.localScale = Vector3.one * scale;
+            t.localRotation = localRot;
+            t.localPosition = new Vector3(0, 0, -0.003f) - localRot * (centreMuseum * scale);
+            miniature.Refresh(); // cable widths and labels depend on the scale
+        }
+
+        // ---------------------------------------------------------------- interaction
+
+        void OnMiniatureRefreshed()
+        {
+            wired.RemoveWhere(r => r == null);
+            foreach (var tm in miniature.GetComponentsInChildren<TextMesh>(true)) UiKit.UseWorldText(tm); // room names: hidden behind objects
+            foreach (var rv in miniature.Rooms.Values)
+            {
+                if (!wired.Add(rv)) continue;
+                var id = rv.RoomId;
+                var c = rv.Floor.GetComponent<Clickable>();
+                if (c == null) c = rv.Floor.AddComponent<Clickable>();
+                c.Clicked += (_, _) => OnRoomClicked(id);
+                c.HoverChanged += h =>
+                {
+                    if (h) hoveredId = id; else if (hoveredId == id) hoveredId = null;
+                    UpdateVisuals();
+                };
+            }
+            UpdateVisuals();
+        }
+
+        void OnRoomClicked(string id)
+        {
+            var data = Guide.Data;
+            var target = Guide.GetRoom(id);
+            if (target == null) return;
+            if (id == roomId) { Sounds.Play(Sounds.Error, 0.4f); Flash($"Vous êtes déjà dans « {target.name} »."); return; }
+            if (!MuseumPaths.AreConnected(data, roomId, id))
+            {
+                Sounds.Play(Sounds.Error, 0.5f);
+                var path = MuseumPaths.ShortestPath(data, roomId, id);
+                Flash(path != null && path.Count > 2
+                    ? $"« {target.name} » n'est pas reliée à cette salle : passez d'abord par « {Guide.GetRoom(path[1])?.name} »."
+                    : $"« {target.name} » n'est reliée à cette salle par aucun passage.");
+                return;
+            }
+            Sounds.Play(Sounds.Click, 0.6f);
+            mode.TeleportToRoom(id, roomId);
+        }
+
+        float flashUntil;
+        void Flash(string message)
+        {
+            status.text = UiKit.Wrap(message, UiKit.CharsFor(BoardWidth - 0.06f, 0.026f), 3);
+            status.color = UiKit.Error;
+            flashUntil = Time.time + 3f;
+        }
+
+        void UpdateVisuals()
+        {
+            var data = Guide.Data;
+            if (data == null) return;
+            var here = Guide.GetRoom(roomId);
+            title.text = here != null ? $"Vous êtes ici : {here.name}" : "Plan du musée";
+
+            foreach (var rv in miniature.Rooms.Values)
+            {
+                var id = rv.RoomId;
+                bool connected = MuseumPaths.AreConnected(data, roomId, id);
+                Color c;
+                if (id == roomId) c = HereColor;
+                else c = connected ? ConnectedColor : FarColor;
+                if (id == hoveredId && connected) c = Color.Lerp(c, HoverColor, 0.6f);
+                rv.SetFloorTint(c);
+            }
+
+            if (Time.time >= flashUntil)
+            {
+                string line;
+                var hovered = Guide.GetRoom(hoveredId);
+                if (hovered != null && hoveredId != roomId)
+                    line = MuseumPaths.AreConnected(data, roomId, hoveredId) ? $"Gâchette : aller dans « {hovered.name} »" : $"« {hovered.name} » : non reliée à cette salle";
+                else line = "Salles vertes = reliées : gâchette pour y aller";
+                status.text = UiKit.Wrap(line, UiKit.CharsFor(BoardWidth - 0.06f, 0.026f), 3);
+                status.color = Color.white;
+            }
+        }
+
+        void LateUpdate()
+        {
+            var cam = Camera.main;
+            if (cam == null || Guide == null) return;
+            var root = mode.Immersive.transform;
+            // Constant world size (metres) whatever the miniature scale.
+            float inv = 1f / Mathf.Max(scale, 1e-4f);
+
+            var p = root.InverseTransformPoint(cam.transform.position);
+            var f = root.InverseTransformDirection(cam.transform.forward);
+            marker.localPosition = new Vector3(p.x, 1.2f, p.z);
+            if (new Vector2(f.x, f.z).sqrMagnitude > 1e-4f) marker.localRotation = Quaternion.Euler(0, Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg, 0);
+            marker.localScale = Vector3.one * (0.045f * inv);
+
+            if (Time.time >= flashUntil && status.color == UiKit.Error) UpdateVisuals();
+        }
+    }
+}
