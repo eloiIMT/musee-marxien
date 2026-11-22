@@ -14,8 +14,10 @@ namespace VirtualMuseum.AppEditor
     {
         const string MaterialsFolder = "Assets/Museum/Materials";
         const string RigPath = "Assets/XR/Essentials/Prefabs/XR Origin (XR Rig).prefab";
-        const float BoardCenterY = 1.35f;                              // centre at chest / eye height
-        static readonly Vector3 BoardSize = new Vector3(1.4f, 1.0f, 0.04f); // width, height, thickness
+        const float BoardCenterY = 1.3f;                               // centre a little below eye height
+        static readonly Vector3 BoardSize = new Vector3(2.0f, 1.4f, 0.03f); // architect plan sheet: width, height, thickness
+        const float BoardTilt = 15f;                                   // on an easel: top leans away from the user
+        const float UserDistance = 1.0f;                               // user stands this far in front of the plan
         static readonly Vector3 BenchPosition = new Vector3(5f, 0f, -10f);
 
         [MenuItem("Tools/Virtual Museum/Create Maquette Sandbox")]
@@ -54,6 +56,7 @@ namespace VirtualMuseum.AppEditor
             board.transform.SetParent(bench, false);
             board.transform.localScale = BoardSize;
             board.transform.localPosition = new Vector3(0f, BoardCenterY, 0f);
+            board.transform.localRotation = Quaternion.Euler(BoardTilt, 0f, 0f);
             board.GetComponent<Renderer>().sharedMaterial = boardMat;
 
             // Miniature: floor in the board plane, rooms flat, the selected one comes out in 3D towards the user.
@@ -136,6 +139,186 @@ namespace VirtualMuseum.AppEditor
             EditorSceneManager.MarkSceneDirty(ground.scene);
         }
 
+        const string WorkshopRoomPath = "Assets/3D/Atelier.fbx";
+
+        /// <summary>
+        /// Closed workshop room around the plan (Assets/3D/Atelier.fbx, built from workshop.glb by Assets/3D/Source~/build.py):
+        /// room, wooden easel holding the plan, button shelf, tutorial lectern. Child of the Workbench so it is hidden in
+        /// visitor mode; its origin is the Workbench origin. Spot_* empties mark the stations (gacha, PC screen, lever,
+        /// elevator, bin...); <see cref="ApplyWorkshopLayout"/> moves the existing plan, buttons, tutorial and rig onto them.
+        /// Decor has no colliders (rays must reach the plan) and casts no shadows (closed ceiling).
+        /// </summary>
+        [MenuItem("Tools/Virtual Museum/Add Workshop Room")]
+        public static void AddWorkshopRoom()
+        {
+            var bench = GameObject.Find("Workbench");
+            if (bench == null) { Debug.LogWarning("No 'Workbench' in the scene: create the maquette sandbox first."); return; }
+            if (bench.transform.Find("Atelier") != null) { ApplyWorkshopLayout(); return; }
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(WorkshopRoomPath);
+            if (prefab == null) { Debug.LogWarning("Workshop room model not found at " + WorkshopRoomPath); return; }
+
+            var room = (GameObject)PrefabUtility.InstantiatePrefab(prefab, bench.transform);
+            room.name = "Atelier";
+            room.transform.localPosition = Vector3.zero;
+            room.transform.localRotation = Quaternion.identity;
+            room.transform.localScale = Vector3.one;
+            foreach (var r in room.GetComponentsInChildren<MeshRenderer>())
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            Undo.RegisterCreatedObjectUndo(room, "Add Workshop Room");
+
+            // The room has its own floor and wall: keep the floor collider (the rig has gravity), hide the old visuals.
+            HideRenderer(GameObject.Find("Workshop Floor"));
+            HideRenderer(bench.transform.Find("Board Stand")?.gameObject);
+
+            // Soft fill light under the ceiling (the directional light still lights the room: decor casts no shadows).
+            var fill = new GameObject("Atelier Fill Light").AddComponent<Light>();
+            fill.transform.SetParent(room.transform, false);
+            fill.transform.localPosition = new Vector3(0f, 2.4f, -1.4f);
+            fill.type = LightType.Point;
+            fill.range = 6f;
+            fill.intensity = 1.2f;
+            fill.shadows = LightShadows.None;
+            Undo.RegisterCreatedObjectUndo(fill.gameObject, "Add Workshop Room");
+
+            ApplyWorkshopLayout();
+            Debug.Log("Workshop room added under 'Workbench'. Spot_* children mark the stations. Save the scene.");
+        }
+
+        const string BlueprintTexturePath = "Assets/Museum/Textures/PlanBlueprint.png";
+        const string BlueprintMaterialPath = MaterialsFolder + "/PlanBlueprint.mat";
+
+        /// <summary>
+        /// Puts the existing workshop objects on the Atelier's spots: plan board on the easel (size, tilt, blueprint paper),
+        /// buttons on the easel's shelf, tutorial on the lectern, XR rig at Spot_Joueur. Re-run after re-exporting the FBX.
+        /// Spot convention: the object's front (-Z) faces the spot's +Z.
+        /// </summary>
+        [MenuItem("Tools/Virtual Museum/Apply Workshop Layout")]
+        public static void ApplyWorkshopLayout()
+        {
+            var bench = GameObject.Find("Workbench");
+            var room = bench != null ? bench.transform.Find("Atelier") : null;
+            if (room == null) { Debug.LogWarning("No 'Workbench/Atelier': run Tools > Virtual Museum > Add Workshop Room."); return; }
+            var facing = Quaternion.Euler(0f, 180f, 0f);
+            EnsureEmissiveCeilingLights();
+            foreach (var mr in room.GetComponentsInChildren<MeshRenderer>())   // closed ceiling: no shadows from the decor
+            {
+                if (mr.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.Off) continue;
+                Undo.RecordObject(mr, "Apply Workshop Layout");
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+
+            Transform Spot(string name)
+            {
+                var s = room.Find(name);
+                if (s == null) Debug.LogWarning("Atelier has no " + name + " (re-export Assets/3D/Atelier.fbx).");
+                return s;
+            }
+            void Place(Transform t, Transform spot, Vector3 offset = default)
+            {
+                if (t == null || spot == null) return;
+                Undo.RecordObject(t, "Apply Workshop Layout");
+                var rot = spot.rotation * facing;
+                t.SetPositionAndRotation(spot.position + rot * offset, rot);
+            }
+
+            var board = bench.transform.Find("Plan Board");
+            var planSpot = Spot("Spot_Plan");
+            Place(board, planSpot);
+            if (board != null)
+            {
+                board.localScale = BoardSize;
+                var r = board.GetComponent<Renderer>();
+                Undo.RecordObject(r, "Apply Workshop Layout");
+                r.sharedMaterial = GetOrCreateBlueprintMaterial();
+                // The miniature is re-fitted at runtime (Maquette.Fit); keep its edit-time pose consistent with the board.
+                var mini = bench.transform.Find("Museum Miniature");
+                if (mini != null)
+                {
+                    Undo.RecordObject(mini, "Apply Workshop Layout");
+                    mini.SetPositionAndRotation(board.position - board.forward * (BoardSize.z / 2f + 0.002f), board.rotation * Quaternion.Euler(-90f, 0f, 0f));
+                }
+            }
+
+            var tutoSpot = Spot("Spot_Tuto");
+            Place(bench.transform.Find("Tutorial Board"), tutoSpot);
+            Place(bench.transform.Find("Tutorial Text"), tutoSpot, new Vector3(0f, 0f, -0.006f));
+            var newRoomSpot = Spot("Spot_BoutonNouvelleSalle");
+            Place(bench.transform.Find("New Room Button"), newRoomSpot);
+            Place(bench.transform.Find("Caption"), newRoomSpot, new Vector3(0f, 0.08f, -0.02f));
+            Place(bench.transform.Find("Visitor Teleport Button"), Spot("Spot_VueVisiteur"));
+
+            var stand = bench.transform.Find("Board Stand");
+            if (stand != null && stand.gameObject.activeSelf)
+            {
+                Undo.RecordObject(stand.gameObject, "Apply Workshop Layout");
+                stand.gameObject.SetActive(false); // the easel holds the plan now
+            }
+
+            var fill = room.Find("Atelier Fill Light");
+            if (fill != null) { Undo.RecordObject(fill, "Apply Workshop Layout"); fill.localPosition = new Vector3(0f, 2.4f, -1.0f); }
+
+            var rig = GameObject.Find("XR Origin (XR Rig)");
+            var userSpot = Spot("Spot_Joueur");
+            if (rig != null && userSpot != null)
+            {
+                Undo.RecordObject(rig.transform, "Apply Workshop Layout");
+                rig.transform.SetPositionAndRotation(userSpot.position, userSpot.rotation);
+            }
+            EditorSceneManager.MarkSceneDirty(room.gameObject.scene);
+        }
+
+        const string CeilingLightMaterialPath = MaterialsFolder + "/AtelierLumiere.mat";
+
+        /// <summary>The FBX's "Atelier_Lumiere" material (ceiling panels) is remapped to an emissive project material.</summary>
+        static void EnsureEmissiveCeilingLights()
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(CeilingLightMaterialPath);
+            if (mat == null)
+            {
+                mat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { name = "AtelierLumiere" };
+                var warm = new Color(1f, 0.96f, 0.88f);
+                mat.SetColor("_BaseColor", warm);
+                mat.EnableKeyword("_EMISSION");
+                mat.SetColor("_EmissionColor", warm * 1.6f);
+                AssetDatabase.CreateAsset(mat, CeilingLightMaterialPath);
+                // set after CreateAsset: URP's material validation otherwise drops the keyword
+                mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                mat.EnableKeyword("_EMISSION");
+                EditorUtility.SetDirty(mat);
+            }
+            var importer = AssetImporter.GetAtPath(WorkshopRoomPath) as ModelImporter;
+            if (importer == null) return;
+            var id = new AssetImporter.SourceAssetIdentifier(typeof(Material), "Atelier_Lumiere");
+            if (importer.GetExternalObjectMap().TryGetValue(id, out var current) && current == mat) return;
+            importer.AddRemap(id, mat);
+            importer.SaveAndReimport();
+        }
+
+        static Material GetOrCreateBlueprintMaterial()
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(BlueprintMaterialPath);
+            if (mat != null) return mat;
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            mat = new Material(shader) { name = "PlanBlueprint" };
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(BlueprintTexturePath);
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", tex);
+            if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", tex);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", Color.white);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.05f);
+            if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.05f);
+            AssetDatabase.CreateAsset(mat, BlueprintMaterialPath);
+            return mat;
+        }
+
+        static void HideRenderer(GameObject go)
+        {
+            if (go == null) return;
+            var r = go.GetComponent<Renderer>();
+            if (r == null || !r.enabled) return;
+            Undo.RecordObject(r, "Add Workshop Room");
+            r.enabled = false;
+        }
+
         const string TutorialText =
             "MAQUETTE — COMMANDES\n" +
             "\n" +
@@ -199,7 +382,7 @@ namespace VirtualMuseum.AppEditor
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(RigPath);
             if (prefab == null) { Debug.LogWarning("XR rig prefab not found at " + RigPath + ": add one manually."); return; }
             var rig = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            rig.transform.SetPositionAndRotation(BenchPosition + new Vector3(0f, 0f, -0.7f), Quaternion.identity);
+            rig.transform.SetPositionAndRotation(BenchPosition + new Vector3(0f, 0f, -UserDistance), Quaternion.identity);
             Undo.RegisterCreatedObjectUndo(rig, "Add XR Rig");
 
             // The default scene camera would fight with the rig's camera.
