@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -200,13 +201,11 @@ namespace VirtualMuseum.AppEditor
             model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             model.transform.position += originalCenter - GetCombinedBounds(renderers).center;
 
-            var buttonMaterial = GetOrCreateMaterial("GachaButton", new Color(1f, 0.55f, 0.08f), true);
             var capsuleMaterial = GetOrCreateMaterial("GachaCapsule", new Color(1f, 0.18f, 0.62f), true);
             var displayMaterial = GetOrCreateMaterial("GachaDisplay", new Color(0.08f, 0.09f, 0.11f), false);
 
             var front = bounds.min.z - 0.06f;
-            var buttonPosition = new Vector3(bounds.center.x, bounds.min.y + bounds.size.y * 0.62f, front);
-            var signPosition = buttonPosition + Vector3.up * 0.17f;
+            var signPosition = new Vector3(bounds.center.x, bounds.min.y + bounds.size.y * 0.62f + 0.17f, front);
             var sign = GameObject.CreatePrimitive(PrimitiveType.Cube);
             sign.name = "Gacha Instructions";
             UnityEngine.Object.DestroyImmediate(sign.GetComponent<Collider>());
@@ -216,46 +215,131 @@ namespace VirtualMuseum.AppEditor
             sign.transform.localScale = Vector3.Scale(sign.transform.localScale, new Vector3(0.42f, 0.18f, 0.025f));
             sign.GetComponent<Renderer>().sharedMaterial = displayMaterial;
 
-            var instructions = CreateText(machine.transform, "Gacha Instructions Text",
-                "APPUYEZ SUR LA GACHETTE\nVISEZ LE BOUTON\nGACHA",
+            var instructions = CreateText(machine.transform, "Gacha Instructions Text", GachaInstructions,
                 signPosition + new Vector3(0f, 0f, -0.014f), 0.0028f, 42, Color.white);
             instructions.alignment = TextAlignment.Center;
             instructions.anchor = TextAnchor.MiddleCenter;
 
-            var button = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            button.name = "Press To Dispense Button";
-            button.transform.SetParent(machine.transform, true);
-            button.transform.position = buttonPosition;
-            button.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            button.transform.localScale = Vector3.one * (1f / machine.transform.lossyScale.x);
-            button.transform.localScale = Vector3.Scale(button.transform.localScale, new Vector3(0.14f, 0.025f, 0.14f));
-            button.GetComponent<Renderer>().sharedMaterial = buttonMaterial;
-            button.AddComponent<Clickable>();
-            var dispenser = button.AddComponent<GachaDispenser>();
-
-            var tray = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            tray.name = "Capsule Output Tray";
-            tray.transform.SetParent(machine.transform, true);
-            tray.transform.position = new Vector3(bounds.center.x, bounds.min.y + 0.08f, bounds.min.z - 0.08f);
-            tray.transform.localScale = Vector3.one * (1f / machine.transform.lossyScale.x);
-            tray.transform.localScale = Vector3.Scale(tray.transform.localScale, new Vector3(0.28f, 0.08f, 0.18f));
-            tray.GetComponent<Renderer>().sharedMaterial = displayMaterial;
-
-            var spawnPoint = new GameObject("Capsule Spawn Point").transform;
-            spawnPoint.SetParent(machine.transform, true);
-            spawnPoint.position = new Vector3(bounds.center.x, bounds.min.y + 0.18f, bounds.min.z - 0.12f);
-            var capsuleLabel = CreateText(machine.transform, "Capsule Output Label", "CAPSULE",
-                new Vector3(bounds.center.x, bounds.min.y + 0.05f, bounds.min.z - 0.19f), 0.0025f, 40, Color.white);
-            capsuleLabel.alignment = TextAlignment.Center;
-            capsuleLabel.anchor = TextAnchor.MiddleCenter;
-
+            var dispenser = machine.AddComponent<GachaDispenser>();
             var serialized = new SerializedObject(dispenser);
-            serialized.FindProperty("capsuleSpawnPoint").objectReferenceValue = spawnPoint;
             serialized.FindProperty("capsuleMaterial").objectReferenceValue = capsuleMaterial;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+            SetupGachaCrank(machine.transform);
 
             Undo.RegisterCreatedObjectUndo(machine, "Add Gacha Machine");
             return machine;
+        }
+
+        const string GachaInstructions = "TOURNEZ LA MANIVELLE\nGACHETTE + TOURNER LE POIGNET";
+        const string GachaKnobName = "Top_Circle_Low";
+        const float GachaCapsuleDiameter = 0.1f;
+        // Machine-local points (every machine is built by CreateGachaMachine, so they hold for every copy), measured
+        // on the FBX for a 0.1 m capsule: inside the chute behind the round opening on the right, and in the cup below.
+        static readonly Vector3 GachaChutePoint = new Vector3(1.37f, 1.72f, -0.45f);
+        static readonly Vector3 GachaCupPoint = new Vector3(1.37f, 1.34f, -1.62f);
+
+        [MenuItem("Tools/Virtual Museum/Upgrade Gacha Machines to Crank")]
+        public static void UpgradeGachaMachinesToCrank()
+        {
+            foreach (var path in new[] { SandboxScenePath, MainScenePath })
+            {
+                var scene = SceneManager.GetSceneByPath(path);
+                bool openedHere = !scene.IsValid() || !scene.isLoaded;
+                if (openedHere) scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
+                try
+                {
+                    var machines = scene.GetRootGameObjects()
+                        .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
+                        .Where(t => t.name == "Gacha Machine" && t.GetComponentInChildren<GachaCrank>(true) == null)
+                        .ToList();
+                    foreach (var machine in machines) UpgradeGachaMachine(machine);
+                    int upgraded = machines.Count;
+                    if (upgraded == 0 && !scene.isDirty) continue;
+                    EditorSceneManager.MarkSceneDirty(scene);
+                    if (!EditorSceneManager.SaveScene(scene))
+                        throw new System.InvalidOperationException("Could not save " + path);
+                    Debug.Log($"{upgraded} gacha machine(s) upgraded to the crank in {path}.");
+                }
+                finally
+                {
+                    if (openedHere) EditorSceneManager.CloseScene(scene, true);
+                }
+            }
+        }
+
+        /// <summary>Old machines: front button + tray at the bottom. Replace them with the knob and the right-hand cup.</summary>
+        static void UpgradeGachaMachine(Transform machine)
+        {
+            Material capsuleMaterial = null;
+            var oldDispenser = machine.GetComponentInChildren<GachaDispenser>(true);
+            if (oldDispenser != null)
+                capsuleMaterial = new SerializedObject(oldDispenser).FindProperty("capsuleMaterial").objectReferenceValue as Material;
+            foreach (var name in new[] { "Press To Dispense Button", "Capsule Output Tray", "Capsule Output Label" })
+            {
+                var old = machine.Find(name);
+                if (old != null) Undo.DestroyObjectImmediate(old.gameObject);
+            }
+
+            var text = machine.Find("Gacha Instructions Text");
+            if (text != null && text.TryGetComponent<TextMesh>(out var mesh))
+            {
+                Undo.RecordObject(mesh, "Gacha instructions");
+                mesh.text = GachaInstructions;
+            }
+
+            var dispenser = machine.GetComponent<GachaDispenser>();
+            if (dispenser == null) dispenser = Undo.AddComponent<GachaDispenser>(machine.gameObject);
+            var serialized = new SerializedObject(dispenser);
+            serialized.FindProperty("capsuleMaterial").objectReferenceValue =
+                capsuleMaterial != null ? capsuleMaterial : GetOrCreateMaterial("GachaCapsule", new Color(1f, 0.18f, 0.62f), true);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            SetupGachaCrank(machine);
+        }
+
+        /// <summary>Knob pivot (collider + XR interactable + <see cref="GachaCrank"/>), chute and cup points.</summary>
+        static void SetupGachaCrank(Transform machine)
+        {
+            var knob = machine.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == GachaKnobName);
+            if (knob == null || !knob.TryGetComponent<Renderer>(out var knobRenderer))
+                throw new System.InvalidOperationException($"The gacha model has no '{GachaKnobName}' knob mesh.");
+
+            var spawn = machine.Find("Capsule Spawn Point");
+            if (spawn == null)
+            {
+                spawn = new GameObject("Capsule Spawn Point").transform;
+                Undo.RegisterCreatedObjectUndo(spawn.gameObject, "Gacha chute");
+                spawn.SetParent(machine, false);
+            }
+            Undo.RecordObject(spawn, "Gacha chute");
+            spawn.SetLocalPositionAndRotation(GachaChutePoint, Quaternion.identity);
+
+            var rest = new GameObject("Capsule Rest Point").transform;
+            Undo.RegisterCreatedObjectUndo(rest.gameObject, "Gacha cup");
+            rest.SetParent(machine, false);
+            rest.SetLocalPositionAndRotation(GachaCupPoint, Quaternion.identity);
+
+            var crank = new GameObject("Gacha Crank");
+            Undo.RegisterCreatedObjectUndo(crank, "Gacha crank");
+            crank.transform.SetParent(machine, false);
+            crank.transform.position = knobRenderer.bounds.center;
+            // Forward out of the machine, toward the user: positive turns are clockwise for them (see GachaCrank).
+            crank.transform.rotation = Quaternion.LookRotation(-machine.forward, machine.up);
+            var sphere = crank.AddComponent<SphereCollider>();
+            sphere.radius = 0.11f / crank.transform.lossyScale.x;
+            crank.AddComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable>();
+            var turn = crank.AddComponent<GachaCrank>();
+
+            var dispenser = machine.GetComponent<GachaDispenser>();
+            var serializedDispenser = new SerializedObject(dispenser);
+            serializedDispenser.FindProperty("capsuleSpawnPoint").objectReferenceValue = spawn;
+            serializedDispenser.FindProperty("capsuleRestPoint").objectReferenceValue = rest;
+            serializedDispenser.FindProperty("capsuleDiameter").floatValue = GachaCapsuleDiameter;
+            serializedDispenser.ApplyModifiedPropertiesWithoutUndo();
+
+            var serializedCrank = new SerializedObject(turn);
+            serializedCrank.FindProperty("knob").objectReferenceValue = knob;
+            serializedCrank.FindProperty("dispenser").objectReferenceValue = dispenser;
+            serializedCrank.ApplyModifiedPropertiesWithoutUndo();
         }
 
         static Bounds GetCombinedBounds(Renderer[] renderers)
