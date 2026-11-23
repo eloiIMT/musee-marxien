@@ -37,8 +37,16 @@ BOARD_C = Vector((0, 1.3, 0))
 TILT = math.radians(15)    # top leans away from the user
 PLAYER_Z = -1.0
 
-XW, XE, ZN = 1.89 + GROW_W, -1.9 - GROW_E, -2.85 - GROW_N   # inner faces: west (PC), east (elevator), north (behind the workbench)
+XW, XE, ZN = 1.89 + GROW_W, -1.9 - GROW_E, -2.85 - GROW_N   # inner faces: west (PC), east (gacha), north (behind the workbench)
 H = 2.6                              # ceiling height
+
+# elevator to the museum (Unity): platform centre on the floor, in front of the machinery wall. The ceiling gets a
+# square opening of half-size ELEV_R above it; the round shaft, its collar and the platform are built in Unity
+# (ElevatorShaft, same radius). The lever is wall-mounted on the front of the tall machine cabinet (Unity x = 2.18,
+# the west run moved by GROW_W), facing the platform, as high as the machine box sticking out above it allows (its
+# underside is at 1.61): grip at ~1.5 m, head height.
+ELEV_X, ELEV_Z, ELEV_R = 1.3, -1.9, 0.55
+LEVER_X, LEVER_Y = 2.18, 1.3
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=GLB)
@@ -171,7 +179,20 @@ def obox(name, center, ax, ay, az, sx, sy, sz, mat):
     bm = bmesh.new(); bm.from_mesh(o.data); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(o.data); bm.free()
     return o
 
+HOLE = (ELEV_X - ELEV_R, ELEV_X + ELEV_R, ELEV_Z - ELEV_R, ELEV_Z + ELEV_R)   # x0, x1, z0, z1
+
 def box(name, x0, x1, y0, y1, z0, z1, mat):
+    # ceiling-level boxes (ceiling slab, beams, cornices, light panels) leave the elevator opening free
+    hx0, hx1, hz0, hz1 = HOLE
+    if y0 >= H - 0.15 and x0 < hx1 and hx0 < x1 and z0 < hz1 and hz0 < z1:
+        if name.startswith('Ceiling_Light'):
+            return None                                   # a light panel cut in two would look odd: dropped
+        last = None
+        for k, (a, b, c, d) in enumerate(((x0, hx0, z0, z1), (hx1, x1, z0, z1),
+                                          (max(x0, hx0), min(x1, hx1), z0, hz0), (max(x0, hx0), min(x1, hx1), hz1, z1))):
+            if b - a > 1e-3 and d - c > 1e-3:
+                last = box(f'{name}_{k}', a, b, y0, y1, c, d, mat)
+        return last
     return obox(name, ((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), (1, 0, 0), (0, 1, 0), (0, 0, 1),
                 x1 - x0, y1 - y0, z1 - z0, mat)
 
@@ -343,9 +364,9 @@ spots = [
     spot('Spot_VueVisiteur', tuple(btn_front + Vector((0, -0.14, 0))), obj_euler=(0, 40, 0)),
     spot('Spot_PC', (1.62 + GROW_W, 1.27, -0.56), obj_euler=(0, 90, 0)),   # where the removed desk's screen was, on the machinery wall
     spot('Spot_Gacha', (0.24, 0.9, -2.31 - GROW_N), obj_euler=(0, 180, 0)),
-    spot('Spot_Bac', (0.75, 0, -1.5), obj_euler=(0, 124, 0)),
-    spot('Spot_Ascenseur', (XE, 0, -1.3), obj_euler=(0, -90, 0)),
-    spot('Spot_Levier', (-0.85, 0, -1.35), obj_euler=(0, -90, 0)),
+    spot('Spot_Bac', (-0.85, 0, -1.35), obj_euler=(0, -90, 0)),
+    spot('Spot_Ascenseur', (ELEV_X, 0, ELEV_Z), spot_euler=(0, 0, 0)),          # platform centre (floor level)
+    spot('Spot_Levier', (LEVER_X, LEVER_Y, ELEV_Z), obj_euler=(0, 90, 0)),      # on the cabinet, front towards the platform (-X)
     spot('Spot_Joueur', (0, 0, PLAYER_Z), spot_euler=(0, 0, 0)),
 ]
 

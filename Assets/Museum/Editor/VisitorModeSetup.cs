@@ -9,7 +9,7 @@ namespace VirtualMuseum.AppEditor
 {
     /// <summary>
     /// Adds the visitor mode to a scene that already has the organizer setup (Create Maquette Sandbox):
-    /// "Vue visiteur" teleport button on the workbench, wall plan for the rooms, mode manager + guide.
+    /// wall plan for the rooms, mode manager + guide (then Add Elevator to go from one mode to the other).
     /// Everything else is built at runtime.
     /// </summary>
     public static class VisitorModeSetup
@@ -37,10 +37,7 @@ namespace VirtualMuseum.AppEditor
             var ui = AssetDatabase.LoadAssetAtPath<Material>(MaterialsFolder + "/Handle.mat");
             var overlay = GetOrCreateOverlayMaterial();
 
-            // Provisional teleport button, right of the plan board under "Nouvelle salle" (hidden with the workbench).
-            var button = new GameObject("Visitor Teleport Button").AddComponent<VisitorTeleportButton>();
-            button.transform.SetParent(workbench.transform, false);
-            button.transform.localPosition = new Vector3(0.85f, 0.85f, -0.05f);
+            // Going from one mode to the other: the elevator (Tools > Virtual Museum > Add Elevator).
 
             // Wall plan, moved at runtime into the visitor's current room.
             var plan = new GameObject("Visitor Room Plan").AddComponent<RoomPlan>();
@@ -77,15 +74,11 @@ namespace VirtualMuseum.AppEditor
             so.FindProperty("mode").objectReferenceValue = mode;
             so.FindProperty("miniature").objectReferenceValue = mini;
             so.ApplyModifiedPropertiesWithoutUndo();
-            so = new SerializedObject(button);
-            so.FindProperty("mode").objectReferenceValue = mode;
-            so.ApplyModifiedPropertiesWithoutUndo();
-
-            foreach (var go in new[] { modeGo, button.gameObject, plan.gameObject })
+            foreach (var go in new[] { modeGo, plan.gameObject })
                 Undo.RegisterCreatedObjectUndo(go, "Add Visitor Mode");
             EditorSceneManager.MarkSceneDirty(modeGo.scene);
             Selection.activeGameObject = modeGo;
-            Debug.Log("Visitor mode added: 'Vue visiteur' button on the workbench, wall plan, mode manager. Save the scene.");
+            Debug.Log("Visitor mode added: wall plan, mode manager. Add the elevator (Tools > Virtual Museum > Add Elevator), then save the scene.");
         }
 
         static void SetArray(SerializedProperty array, params GameObject[] items)

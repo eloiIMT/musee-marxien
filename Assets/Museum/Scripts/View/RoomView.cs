@@ -20,6 +20,9 @@ namespace VirtualMuseum.App
         public IReadOnlyDictionary<string, GameObject> Artworks => artworks;
 
         Transform floor, wallN, wallS, wallE, wallW, artworksRoot;
+        Transform[] holeParts;   // floor around the elevator opening (immersive museum only)
+        float holeHalf;
+        Vector2 holeCentre;
         TextMesh label;
         float wallThickness, lowWallHeight, labelHeight;
         bool expanded = true;
@@ -92,6 +95,29 @@ namespace VirtualMuseum.App
             ApplyWarnings();
         }
 
+        /// <summary>
+        /// Square opening of half-size <paramref name="halfSize"/> in the floor, centred on room-local (x, z)
+        /// <paramref name="centre"/> (elevator well, <see cref="ElevatorRide"/>); 0 closes it. The floor is then drawn and
+        /// collided as four slabs around the opening.
+        /// </summary>
+        public void SetFloorHole(Vector2 centre, float halfSize)
+        {
+            if (Mathf.Approximately(halfSize, holeHalf) && centre == holeCentre) return;
+            holeHalf = Mathf.Max(0f, halfSize);
+            holeCentre = centre;
+            bool open = holeHalf > 0f;
+            if (open && holeParts == null)
+            {
+                var material = floor.GetComponent<Renderer>().sharedMaterial;
+                holeParts = new Transform[4];
+                for (int i = 0; i < 4; i++) holeParts[i] = CreatePart("Floor (around elevator) " + i, material, true);
+            }
+            floor.GetComponent<Renderer>().enabled = !open;
+            floor.GetComponent<Collider>().enabled = !open;
+            if (holeParts != null) foreach (var p in holeParts) p.gameObject.SetActive(open);
+            Layout();
+        }
+
         /// <summary>Floor highlight (hover / selection / target); null restores the material colour.</summary>
         public void SetFloorTint(Color? color)
         {
@@ -136,6 +162,18 @@ namespace VirtualMuseum.App
             float h = expanded ? Data.height : Mathf.Min(lowWallHeight, Data.height);
 
             Place(floor, new Vector3(0, -FloorThickness / 2, 0), new Vector3(w, FloorThickness, l));
+            if (holeHalf > 0f && holeParts != null)
+            {
+                // opening [x0, x1] x [z0, z1], kept inside the floor
+                float s = Mathf.Min(holeHalf, w / 2f - 0.05f, l / 2f - 0.05f), y = -FloorThickness / 2;
+                float cx = Mathf.Clamp(holeCentre.x, -w / 2f + s + 0.05f, w / 2f - s - 0.05f);
+                float cz = Mathf.Clamp(holeCentre.y, -l / 2f + s + 0.05f, l / 2f - s - 0.05f);
+                float x0 = cx - s, x1 = cx + s, z0 = cz - s, z1 = cz + s;
+                Place(holeParts[0], new Vector3((-w / 2f + x0) / 2f, y, 0), new Vector3(x0 + w / 2f, FloorThickness, l));
+                Place(holeParts[1], new Vector3((x1 + w / 2f) / 2f, y, 0), new Vector3(w / 2f - x1, FloorThickness, l));
+                Place(holeParts[2], new Vector3(cx, y, (z1 + l / 2f) / 2f), new Vector3(2f * s, FloorThickness, l / 2f - z1));
+                Place(holeParts[3], new Vector3(cx, y, (-l / 2f + z0) / 2f), new Vector3(2f * s, FloorThickness, z0 + l / 2f));
+            }
             Place(wallN, new Vector3(0, h / 2, l / 2), new Vector3(w + e, h, e));
             Place(wallS, new Vector3(0, h / 2, -l / 2), new Vector3(w + e, h, e));
             Place(wallE, new Vector3(w / 2, h / 2, 0), new Vector3(e, h, l + e));

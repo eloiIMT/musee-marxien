@@ -421,7 +421,6 @@ namespace VirtualMuseum.AppEditor
             Place(bench.transform.Find("Tutorial Board"), tutoSpot);
             Place(bench.transform.Find("Tutorial Text"), tutoSpot, new Vector3(0f, 0f, -0.006f));
             // Spot_BoutonNouvelleSalle is left empty: rooms are created by clicking the empty plan.
-            Place(bench.transform.Find("Visitor Teleport Button"), Spot("Spot_VueVisiteur"));
 
             var stand = bench.transform.Find("Board Stand");
             if (stand != null && stand.gameObject.activeSelf)

@@ -11,11 +11,11 @@ namespace VirtualMuseum.App
     ///  - red arrow = user position and heading, blue room = here;
     ///  - green rooms = connected: TRIGGER on one = go there (short fade, arrival facing the room we come from);
     ///    grey rooms = not connected (refused);
-    ///  - button below = back to the workshop.
+    ///  - lever on the wall below = back to the workshop (<see cref="ElevatorRide"/>).
     /// </summary>
     public class RoomPlan : MonoBehaviour
     {
-        const float BoardWidth = 0.95f, BoardHeight = 0.72f, BoardCenterY = 1.45f, WallHalfThickness = 0.05f;
+        const float BoardWidth = 0.95f, BoardHeight = 0.72f, BoardCenterY = 1.5f, WallHalfThickness = 0.05f;
         static readonly Color HereColor = new Color(0.5f, 0.8f, 1f);
         static readonly Color ConnectedColor = new Color(0.62f, 1f, 0.66f);
         static readonly Color HoverColor = new Color(0.8f, 1f, 0.82f);
@@ -43,9 +43,7 @@ namespace VirtualMuseum.App
             title.color = Color.white;
             status = UiKit.Text(transform, "", new Vector3(0, -BoardHeight / 2f - 0.03f, -0.01f), 0.026f, Color.white, TextAnchor.UpperCenter, TextAlignment.Center);
             UiKit.Plate(transform, "Status Plate", new Vector3(0, -BoardHeight / 2f - 0.075f, 0.002f), new Vector3(BoardWidth, 0.11f, 0.01f), UiKit.PanelColor);
-            var back = UiButton.Create(transform, "Retour à l'atelier", new Vector3(0, -BoardHeight / 2f - 0.2f, -0.01f),
-                                       new Vector2(0.34f, 0.075f), new Color(0.85f, 0.45f, 0.2f), 0.03f);
-            back.Clicked += () => mode.ExitToOrganizer();
+            // Back to the workshop: the elevator lever on the wall under the plan (ElevatorRide).
 
             if (miniature == null) miniature = GetComponentInChildren<MuseumView>(true);
             marker = new GameObject("You Are Here").transform;

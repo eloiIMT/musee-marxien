@@ -153,9 +153,10 @@ Transform:
   - {fileID: 526327746}
   - {fileID: 904665164}
   - {fileID: 58947363}
-  - {fileID: 1553283243}
   - {fileID: 837804847}
   - {fileID: 823519508}
+  - {fileID: 1844484069}
+  - {fileID: 1923048721}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &58947362
@@ -1059,6 +1060,7 @@ GameObject:
   - component: {fileID: 1059109477}
   - component: {fileID: 1059109476}
   - component: {fileID: 1059109475}
+  - component: {fileID: 1059109478}
   m_Layer: 0
   m_Name: Visitor Mode
   m_TagString: Untagged
@@ -1102,9 +1104,6 @@ MonoBehaviour:
   worldTextMaterial: {fileID: 2100000, guid: ca2e39e5d5da4cf4d90c644384a6d299, type: 2}
   uiMaterial: {fileID: 2100000, guid: e14d1b55109a07542aec1b3066fc340f, type: 2}
   visitorMoveSpeed: 1.4
-  fadeOut: 0.45
-  fadeIn: 0.5
-  blackTime: 0.3
   roomFade: 0.18
 --- !u!4 &1059109477
 Transform:
@@ -1121,6 +1120,30 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1059109478
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1059109474}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76dd4ec1c07940742836ae2cfa1f754f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.ElevatorRide
+  workshopShaft: {fileID: 1844484070}
+  workshopLever: {fileID: 1923048720}
+  leverModel: {fileID: 919132149155446097, guid: 0471f919879f41044a128db94d6b7919, type: 3}
+  leverScale: 0.3
+  leverHeight: 1.45
+  tubeMaterial: {fileID: 2100000, guid: 7f156d8e451e97c41a4376c00d228776, type: 2}
+  collarMaterial: {fileID: 2100000, guid: 980c039fcd53c0a4daa6b18fe7d67bed, type: 2}
+  platformMaterial: {fileID: 2100000, guid: 62877dde7bbcd0346a8a5687ca60bfd8, type: 2}
+  swapHeadroom: 0.8
+  speed: 1
+  hatchTime: 0.45
+  boardTime: 0.5
 --- !u!1 &1062174401
 GameObject:
   m_ObjectHideFlags: 0
@@ -1275,51 +1298,6 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
---- !u!1 &1553283242
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1553283243}
-  - component: {fileID: 1553283244}
-  m_Layer: 0
-  m_Name: Visitor Teleport Button
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1553283243
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1553283242}
-  serializedVersion: 2
-  m_LocalRotation: {x: -3.6596882e-17, y: -0.34202018, z: -3.6596882e-17, w: -0.9396926}
-  m_LocalPosition: {x: 1.2442884, y: 0.86, z: -0.1706419}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 4265463}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1553283244
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1553283242}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d84cb88c0b5a1d844bd4b7ff291de10b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.VisitorTeleportButton
-  mode: {fileID: 1059109476}
 --- !u!1001 &1646289654
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1377,6 +1355,59 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 3ad620cde1b901b4a8444fab68fb45c2, type: 3}
+--- !u!1 &1844484068
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1844484069}
+  - component: {fileID: 1844484070}
+  m_Layer: 0
+  m_Name: Elevator Shaft
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1844484069
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1844484068}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 1.3000002, y: 0, z: -1.8999996}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4265463}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1844484070
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1844484068}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94ad73965cc56a24ab4441e97dcf59ad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.ElevatorShaft
+  direction: 0
+  radius: 0.55
+  openingY: 2.6
+  openingThickness: 0.1
+  length: 3.6
+  restHeight: 0.04
+  tubeMaterial: {fileID: 2100000, guid: 7f156d8e451e97c41a4376c00d228776, type: 2}
+  collarMaterial: {fileID: 2100000, guid: 62877dde7bbcd0346a8a5687ca60bfd8, type: 2}
+  platformMaterial: {fileID: 2100000, guid: 62877dde7bbcd0346a8a5687ca60bfd8, type: 2}
 --- !u!1 &1919639230
 GameObject:
   m_ObjectHideFlags: 0
@@ -1485,6 +1516,53 @@ Transform:
   m_LocalRotation: {x: -0.1305262, y: -0.00000011818943, z: 0.0000000041489727, w: -0.9914449}
   m_LocalPosition: {x: 0, y: 1.3, z: 0}
   m_LocalScale: {x: 2, y: 1.4, z: 0.03}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4265463}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1923048719
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1923048721}
+  - component: {fileID: 1923048720}
+  m_Layer: 0
+  m_Name: Elevator Lever
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1923048720
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1923048719}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9278ce864ba1e6746af05d083fed5b29, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.ElevatorLever
+  model: {fileID: 919132149155446097, guid: 0471f919879f41044a128db94d6b7919, type: 3}
+  modelScale: 0.3
+  label: "Monter au mus\xE9e :\nabaisser le levier"
+--- !u!4 &1923048721
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1923048719}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: 0.7071069, z: -0, w: 0.7071067}
+  m_LocalPosition: {x: 2.1800003, y: 1.3, z: -1.8999996}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4265463}

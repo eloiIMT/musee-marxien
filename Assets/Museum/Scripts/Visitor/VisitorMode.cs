@@ -10,11 +10,11 @@ namespace VirtualMuseum.App
 
     /// <summary>
     /// Switches between the two modes, which read the SAME backend data:
-    ///  - Organizer: the workshop (plan board, "Vue visiteur" button) is shown, the life-size museum is hidden;
+    ///  - Organizer: the workshop (plan board, elevator lever) is shown, the life-size museum is hidden;
     ///  - Visitor: the life-size museum (scale 1) is shown, the workshop is hidden.
     /// Hiding the other world keeps the two representations from overlapping, whatever the organizer does with rooms.
-    /// Every change of place (mode change, room to room) goes through a short fade to black (no text),
-    /// so the user never sees the world slide (comfort).
+    /// The mode changes are done by the elevator (<see cref="ElevatorRide"/>); room to room goes through a short fade
+    /// to black (no text), so the user never sees the world slide (comfort). The movement vignette is on in both modes.
     /// Also owns the rig moves and the visitor locomotion settings (hand-relative continuous move, 45° snap turn).
     /// </summary>
     [DefaultExecutionOrder(-50)] // Awake before the plan / buttons, which use its UI material
@@ -37,10 +37,11 @@ namespace VirtualMuseum.App
 
         [Header("Visitor locomotion")]
         [SerializeField] float visitorMoveSpeed = 1.4f;
-        [SerializeField] float fadeOut = 0.45f, fadeIn = 0.5f, blackTime = 0.3f, roomFade = 0.18f;
+        [SerializeField] float roomFade = 0.18f;
 
         public AppMode Mode { get; private set; } = AppMode.Organizer;
-        public bool Busy { get; private set; }
+        /// <summary>A transition (fade, elevator ride) is running: other moves are refused.</summary>
+        public bool Busy { get; internal set; }
         public event Action<AppMode> ModeChanged;
 
         public MuseumApi Api => backend.Api;
@@ -54,8 +55,6 @@ namespace VirtualMuseum.App
         DynamicMoveProvider move;
         DynamicMoveProvider.MovementDirection savedDirection;
         float savedSpeed;
-        Vector3 returnPosition, returnForward; // where the user stood in the workshop before teleporting
-        bool hasReturnPose;
 
         void Awake()
         {
@@ -76,39 +75,37 @@ namespace VirtualMuseum.App
             ApplyVisibility(AppMode.Organizer);
         }
 
-        // ---------------------------------------------------------------- organizer -> visitor
+        // ---------------------------------------------------------------- mode changes (driven by the elevator)
 
-        /// <summary>Teleport into the life-size museum: first room, facing its wall plan.</summary>
-        public bool EnterVisitor(out string error)
+        /// <summary>Whether the visitor view can be entered now, and the room of arrival (the first room).</summary>
+        public bool CanEnterVisitor(out Room room, out string error)
         {
+            room = null;
             error = null;
             if (Busy) { error = "Transition en cours…"; return false; }
             var data = Api.Data;
             if (data.rooms.Count == 0) { error = "Le musée ne contient aucune salle : créez-en une sur le plan."; return false; }
-
-            var room = data.rooms[0];
-            StartCoroutine(Transition(() =>
-            {
-                SaveReturnPose();
-                ApplyVisibility(AppMode.Visitor);
-                ConfigureLocomotion(true);
-                PlaceInRoom(room, PlanFacingPoint(room));
-                Guide?.OnArrived(room.id);
-            }));
+            room = data.rooms[0];
             return true;
         }
 
-        // ---------------------------------------------------------------- visitor -> organizer
-
-        public void ExitToOrganizer()
+        /// <summary>
+        /// Switch to the visitor view at once (the elevator calls it inside its tube): museum shown, visitor locomotion,
+        /// user at the centre of <paramref name="room"/> facing its wall plan (the elevator then places them).
+        /// </summary>
+        public void ArriveAsVisitor(Room room)
         {
-            if (Busy || Mode != AppMode.Visitor) return;
-            StartCoroutine(Transition(() =>
-            {
-                ConfigureLocomotion(false);
-                ApplyVisibility(AppMode.Organizer);
-                if (hasReturnPose) MoveRig(returnPosition, returnForward); // back where the user left the workshop
-            }));
+            ApplyVisibility(AppMode.Visitor);
+            ConfigureLocomotion(true);
+            PlaceInRoom(room, PlanFacingPoint(room));
+            Guide?.OnArrived(room.id);
+        }
+
+        /// <summary>Switch to the organizer view at once (the elevator calls it inside its tube); the caller places the user.</summary>
+        public void ArriveAsOrganizer()
+        {
+            ConfigureLocomotion(false);
+            ApplyVisibility(AppMode.Organizer);
         }
 
         // ---------------------------------------------------------------- room to room
@@ -130,27 +127,6 @@ namespace VirtualMuseum.App
 
         // ---------------------------------------------------------------- helpers
 
-        void SaveReturnPose()
-        {
-            if (Rig == null) return;
-            var head = Rig.Camera.transform;
-            returnPosition = new Vector3(head.position.x, Rig.transform.position.y, head.position.z);
-            returnForward = head.forward;
-            hasReturnPose = true;
-        }
-
-        IEnumerator Transition(Action swap)
-        {
-            Busy = true;
-            Sounds.Play(Sounds.Whoosh, 0.7f);
-            if (Overlay != null) yield return Overlay.FadeTo(1f, fadeOut);
-            try { swap(); }
-            catch (Exception e) { Debug.LogException(e, this); }
-            yield return new WaitForSecondsRealtime(blackTime);
-            if (Overlay != null) yield return Overlay.FadeTo(0f, fadeIn);
-            Busy = false;
-        }
-
         IEnumerator QuickTransition(Action swap)
         {
             Busy = true;
@@ -169,7 +145,6 @@ namespace VirtualMuseum.App
             foreach (var go in organizerObjects) if (go != null) go.SetActive(!visiting);
             foreach (var go in visitorObjects) if (go != null) go.SetActive(visiting);
             if (immersive != null) immersive.gameObject.SetActive(visiting);
-            if (Overlay != null) Overlay.VignetteEnabled = visiting;
             ModeChanged?.Invoke(mode);
         }
 

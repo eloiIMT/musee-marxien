@@ -9,7 +9,7 @@ namespace VirtualMuseum.App
     /// The museum floor lies IN the board plane (museum Y = board normal, towards the user): rooms are drawn flat on the
     /// board and the selected room "comes out" of it in 3D.
     /// - fits the miniature on the board (auto scale, no pan/zoom)
-    /// - plan view: rooms flat, the hovered / selected room expands to 3D
+    /// - plan view: rooms flat, the selected room AND the hovered one (even while another is selected) expand to 3D
     /// - selection of rooms (trigger), gizmo on the selected room
     /// - connections, in the Link mode: trigger on another room links it to the selected one, or unlinks it if
     ///   already linked; linked rooms are lit green, the selected room's connection lines too
@@ -361,7 +361,7 @@ namespace VirtualMuseum.App
                 var id = rv.RoomId;
                 bool selected = id == SelectedRoomId;
                 bool hovered = id == HoveredRoomId;
-                rv.Expanded = selected || (hovered && SelectedRoomId == null);
+                rv.Expanded = selected || hovered;
                 Color? tint = null;
                 if (selected) tint = selectedColor;
                 else if (linking)

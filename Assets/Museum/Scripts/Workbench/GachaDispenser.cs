@@ -95,6 +95,10 @@ namespace VirtualMuseum.App
             });
         }
 
+        /// <summary>
+        /// Open the capsule: a random artwork miniature appears inside it. The artwork is NOT in the museum yet:
+        /// <see cref="GachaArtworkPlacer"/> adds it when the capsule is released over a room of the plan.
+        /// </summary>
         bool ConvertToArtwork(GameObject capsule)
         {
             if (capsule == null) return false;
@@ -118,13 +122,6 @@ namespace VirtualMuseum.App
                 return false;
             }
 
-            var api = backend.Api;
-            if (!TryFindArtworkPlacement(api.Data, out var room, out var localPosition))
-            {
-                Debug.LogError("No museum room has an available place for the Gacha artwork.", backend);
-                return false;
-            }
-
             var visual = Instantiate(definition.prefab, capsule.transform, false);
             visual.name = definition.title;
             visual.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
@@ -132,62 +129,11 @@ namespace VirtualMuseum.App
             foreach (var collider in visual.GetComponentsInChildren<Collider>(true))
                 collider.enabled = false;
 
-            var artwork = api.AddArtwork(definition.id, room.id, localPosition);
-            if (!backend.Save(out var error))
-            {
-                api.RemoveArtwork(artwork.id);
-                Destroy(visual);
-                Debug.LogError("Gacha artwork was not saved; the capsule was not converted: " + error, backend);
-                return false;
-            }
-
+            capsule.AddComponent<GachaArtworkPlacer>().Init(definition, backend);
             var capsuleRenderer = capsule.GetComponent<Renderer>();
             if (capsuleRenderer != null) capsuleRenderer.enabled = false;
-            Debug.Log($"Gacha capsule became '{definition.title}' and was saved to the museum.", this);
+            Debug.Log($"Gacha capsule revealed '{definition.title}': release it over a room of the plan to place it.", this);
             return true;
-        }
-
-        static bool TryFindArtworkPlacement(Museum museum, out Room room, out Vector3 localPosition)
-        {
-            foreach (var candidateRoom in museum.rooms)
-            {
-                var minX = -candidateRoom.width / 2f + 0.75f;
-                var maxX = candidateRoom.width / 2f - 0.75f;
-                var minZ = -candidateRoom.length / 2f + 0.75f;
-                var maxZ = candidateRoom.length / 2f - 0.75f;
-                if (minX > maxX) minX = maxX = 0f;
-                if (minZ > maxZ) minZ = maxZ = 0f;
-
-                for (var z = minZ; z <= maxZ + 0.001f; z += 1f)
-                {
-                    for (var x = minX; x <= maxX + 0.001f; x += 1f)
-                    {
-                        var position = new Vector3(x, 1f, z);
-                        var occupied = false;
-                        foreach (var existing in museum.artworks)
-                        {
-                            if (existing.roomId != candidateRoom.id)
-                                continue;
-
-                            var delta = new Vector2(existing.localPosition.x - x, existing.localPosition.z - z);
-                            if (delta.magnitude < ArtworkHandle.ArtworkMargin)
-                            {
-                                occupied = true;
-                                break;
-                            }
-                        }
-
-                        if (occupied) continue;
-                        room = candidateRoom;
-                        localPosition = position;
-                        return true;
-                    }
-                }
-            }
-
-            room = null;
-            localPosition = Vector3.zero;
-            return false;
         }
     }
 }
