@@ -445,10 +445,10 @@ namespace VirtualMuseum.AppEditor
 
         const string TourScreenModelPath = "Assets/3D/EcranParcours.fbx";
         // On the workbench right behind the user (Spot_Joueur is at x = 0; top at y = 0.9), so it takes the place
-        // reserved for the gacha (Spot_Gacha). Foot flush with the workbench front edge (z = -1.95) and facing straight
-        // +Z: the shelf above the workbench comes down to y = 1.45 from z = -2.2, and the screen top (y = 1.64) must
-        // stay in front of it.
-        static readonly Vector3 TourScreenPosition = new Vector3(0f, 0.9f, -2.08f);
+        // reserved for the gacha (Spot_Gacha). Foot flush with the workbench front edge (z = -2.55, build.py Z_BENCH) and
+        // facing straight +Z: the shelf above the workbench comes down to y = 1.45 from z = -2.8, and the screen top
+        // (y = 1.64) must stay in front of it.
+        static readonly Vector3 TourScreenPosition = new Vector3(0f, 0.9f, -2.68f);
         const float TourScreenModelScale = 2.5f;
 
         /// <summary>

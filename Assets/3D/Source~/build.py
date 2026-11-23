@@ -24,9 +24,12 @@ BLUEPRINT = args[4] if len(args) > 4 else None
 
 S = 1.4                    # original model is ~0.7x real size
 X0, ZF = 0.27, -0.75       # original x mapped to Unity x = 0 (user centred between PC wall and elevator wall), floor height
+# room enlargement (m): west / east walls pushed sideways, north wall + workbench pushed back. The machinery run follows
+# the west wall; easel, lectern, buttons, bookshelf and Spot_Joueur stay put.
+GROW_W, GROW_E, GROW_N = 0.6, 0.6, 0.6
 Z_SHELF = 0.75             # Unity z of the bookshelf front (behind the easel)
 DZ_WEST = -0.87            # machinery wall run moved back so the PC sits at the user's right
-Z_BENCH = -1.95            # Unity z of the workbench front (behind the user)
+Z_BENCH = -1.95 - GROW_N   # Unity z of the workbench front (behind the user)
 
 # plan / easel (Unity)
 BOARD_W, BOARD_H, BOARD_T = 2.0, 1.4, 0.03
@@ -34,7 +37,7 @@ BOARD_C = Vector((0, 1.3, 0))
 TILT = math.radians(15)    # top leans away from the user
 PLAYER_Z = -1.0
 
-XW, XE, ZN = 1.89, -1.9, -2.85      # inner faces: west (PC), east (elevator), north (behind the workbench)
+XW, XE, ZN = 1.89 + GROW_W, -1.9 - GROW_E, -2.85 - GROW_N   # inner faces: west (PC), east (elevator), north (behind the workbench)
 H = 2.6                              # ceiling height
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -83,6 +86,10 @@ for o in list(scene.objects):
     # the model's own PC desk (monitor + keyboard, legs, cables, small tower): the workshop screen is built in Unity at Spot_PC
     if o.name in ('group1048239680', 'group1056998046', 'group966136559', 'group1035163510', 'group1046072727', 'group336546623', 'group73971407'):
         rm(o, 'model PC desk (monitor, keyboard, legs, cables, tower)'); continue
+    # headphones and their cord on the workbench
+    if o.name in ('group850969638', 'group466027787'):                    rm(o, 'headphones + cord on the workbench'); continue
+    # contents of the open drawer (screwdriver sticking out, two small parts): the drawer is closed below
+    if o.name in ('group816388643', 'group1132960755', 'group1293440205'): rm(o, 'open drawer contents'); continue
     # workbench top, centre: room for the gacha machine
     if -0.45 < c.x < 0.72 and 0.38 < c.y < 0.95 and a.z > -0.14 and b.z < 0.32 and o.name != 'group850969638':
         rm(o, 'workbench top (gacha spot)'); continue
@@ -92,7 +99,8 @@ for o in list(scene.objects):
     else:                             k = 'other'
     clusters[o.name] = k
 
-remap_x(scene.objects['group1763104299'], -1.14, 1.66)     # back panel of the bookshelf reaches the east wall
+# back panel of the bookshelf reaches both side walls (original x for Unity x = XW + 0.084 and XE - 0.046)
+remap_x(scene.objects['group1763104299'], X0 - (XW + 0.084) / S, X0 - (XE - 0.046) / S)
 
 # ---------------------------------------------------------------- 2. to final coordinates (per cluster)
 def M_for(k):
@@ -103,7 +111,8 @@ def M_for(k):
         z_of = lambda y: Z_SHELF - S * (y + 1.02) + dz
     # Blender final: (bx, by, bz) = (-ux, -uz, uy) with ux = -S (x - X0), uy = S (z - ZF)
     by0 = -z_of(0.0)      # by = -z_of(y) = S*y + const
-    return Matrix.Translation((-S * X0, by0, -S * ZF)) @ Matrix.Scale(S, 4)
+    dx = GROW_W if k == 'west' else 0.0                      # the machinery run follows the west wall
+    return Matrix.Translation((-S * X0 - dx, by0, -S * ZF)) @ Matrix.Scale(S, 4)
 
 for o in scene.objects:
     if o.type == 'MESH':
@@ -112,6 +121,15 @@ for o in scene.objects:
 bpy.context.view_layer.update()
 
 def U(x, y, z): return Vector((-x, -z, y))
+
+# the open drawer is pushed in, flush with its neighbour (front 0.112 m further out)
+scene.objects['group1329093171'].data.transform(Matrix.Translation(U(0, 0, -0.112)))
+
+# bits that were buried in the old east wall follow it (they would float in the room otherwise)
+for o in scene.objects:
+    if o.type == 'MESH' and o.name != 'group1763104299' and -bbox(o)[1].x < XE + GROW_E - 0.05:
+        o.data.transform(Matrix.Translation(U(-GROW_E, 0, 0))); o.data.update()
+bpy.context.view_layer.update()
 
 # anything of the moved runs now entirely outside the room is dropped
 for o in list(scene.objects):
@@ -180,22 +198,30 @@ new.append(box('Wall_East', XE - 0.2, XE, 0, H, ZN - 0.2, 1.6, 'mat16'))
 new.append(box('Wall_North', XE - 0.2, XW + 0.4, 0, H, ZN - 0.2, ZN, 'mat16'))
 new.append(box('Wall_West_Corner', XW, XW + 0.4, 0, H, 0.38, 1.6, 'mat16'))       # hides the moved machinery run's start
 new.append(box('Wall_West_Upper', XW + 0.05, XW + 0.4, 1.85, H, ZN, 1.6, 'mat16'))
+# below 1.85 the west wall is the model's own panels (moved with the machinery run): they stop short of the pushed-back
+# north wall, so the corner is closed with a full-height piece, and a backing seals any other gap from outside
+west_panels = [o for o in scene.objects if o.type == 'MESH' and clusters.get(o.name) == 'west' and -bbox(o)[1].x > XW - 0.1]
+z_panels = min(-bbox(o)[1].y for o in west_panels)
+new.append(box('Wall_West_NorthCorner', XW, XW + 0.4, 0, H, ZN - 0.2, z_panels + 0.02, 'mat16'))
+new.append(box('Wall_West_Backing', XW + 0.22, XW + 0.4, 0, H, ZN - 0.2, 1.6, 'mat16'))
 new.append(box('Wall_South_Upper', XE, XW + 0.4, 1.74, H, 1.2, 1.45, 'mat16'))
+new.append(box('Wall_South', XE - 0.2, XW + 0.4, 0, H, 1.44, 1.6, 'mat16'))           # seen beside the bookshelf
 new.append(box('Trim_East_Base', XE, XE + 0.03, 0, 0.12, ZN, 0.75, 'mat17'))
 new.append(box('Trim_North_Base', XE, XW, 0, 0.12, ZN, ZN + 0.03, 'mat17'))
 new.append(box('Trim_East_Stripe', XE, XE + 0.015, 1.05, 1.1, ZN, 0.7, 'mat13'))
 new.append(box('Trim_North_Stripe', XE, XW, 1.05, 1.1, ZN, ZN + 0.015, 'mat13'))
-for i, z in enumerate((0.7, -0.15, -2.75)):
+for i, z in enumerate(np.linspace(0.7, ZN + 0.1, 4)):
     new.append(box(f'Pilaster_East_{i}', XE, XE + 0.06, 0, H, z - 0.06, z + 0.06, 'mat17'))
-for i, x in enumerate((-1.8, -0.6, 0.6, 1.8)):
+for i, x in enumerate(np.linspace(XE + 0.1, XW - 0.1, 5)):
     new.append(box(f'Pilaster_North_{i}', x - 0.06, x + 0.06, 0, H, ZN, ZN + 0.06, 'mat17'))
 for n_, a in (('East', (XE, XE + 0.08, ZN, 1.45)), ('West', (XW - 0.03, XW + 0.05, ZN, 1.45))):
     new.append(box(f'Cornice_{n_}', a[0], a[1], H - 0.12, H, a[2], a[3], 'mat17'))
 new.append(box('Cornice_North', XE, XW, H - 0.12, H, ZN, ZN + 0.08, 'mat17'))
 new.append(box('Cornice_South', XE, XW, H - 0.12, H, 1.12, 1.2, 'mat17'))
-for i, z in enumerate((0.45, -0.9, -2.2)):
+for i, z in enumerate(np.linspace(0.45, ZN + 0.65, 4)):
     new.append(box(f'Ceiling_Beam_{i}', XE, XW, H - 0.12, H, z - 0.08, z + 0.08, 'mat16'))
-for i, (x, z) in enumerate(((-0.9, -0.2), (0.9, -0.2), (-0.9, -1.55), (0.9, -1.55))):
+LX = (XW - XE) / 4                                    # light panels at a quarter of the width from the centre
+for i, (x, z) in enumerate(((-LX, -0.2), (LX, -0.2), (-LX, -1.55 - GROW_N), (LX, -1.55 - GROW_N))):
     new.append(box(f'Ceiling_Light_{i}', x - 0.4, x + 0.4, H - 0.03, H, z - 0.2, z + 0.2, 'Atelier_Lumiere'))
 
 # cabinet doors: the original fronts had paper posters taped on them; without the posters the bare dark patches and
@@ -315,8 +341,8 @@ spots = [
     spot('Spot_Tuto', tuple(lec_front), obj_euler=(25, -60, 0)),
     spot('Spot_BoutonNouvelleSalle', tuple(btn_front + Vector((0, 0.14, 0))), obj_euler=(0, 40, 0)),
     spot('Spot_VueVisiteur', tuple(btn_front + Vector((0, -0.14, 0))), obj_euler=(0, 40, 0)),
-    spot('Spot_PC', (1.62, 1.27, -0.56), obj_euler=(0, 90, 0)),      # where the removed desk's screen was, on the machinery wall
-    spot('Spot_Gacha', (0.24, 0.9, -2.31), obj_euler=(0, 180, 0)),
+    spot('Spot_PC', (1.62 + GROW_W, 1.27, -0.56), obj_euler=(0, 90, 0)),   # where the removed desk's screen was, on the machinery wall
+    spot('Spot_Gacha', (0.24, 0.9, -2.31 - GROW_N), obj_euler=(0, 180, 0)),
     spot('Spot_Bac', (0.75, 0, -1.5), obj_euler=(0, 124, 0)),
     spot('Spot_Ascenseur', (XE, 0, -1.3), obj_euler=(0, -90, 0)),
     spot('Spot_Levier', (-0.85, 0, -1.35), obj_euler=(0, -90, 0)),
@@ -387,13 +413,13 @@ def render_all():
     for k_ in range(6):                      # 360 audit from the user's position
         ang = math.radians(60 * k_)
         shot(OUT, f'aud_{k_}', P, U(math.sin(ang), eye - 0.35, PLAYER_Z + math.cos(ang)), lens=14)
-    for k_, (cx, cz) in enumerate(((1.6, 0.5), (-1.7, 0.5), (1.6, -2.6), (-1.7, -2.6))):   # room corners
+    for k_, (cx, cz) in enumerate(((XW - 0.8, 0.5), (XE + 0.2, 0.5), (XW - 0.8, ZN + 0.25), (XE + 0.2, ZN + 0.25))):   # room corners
         shot(OUT, f'corner_{k_}', U(cx, 2.2, cz), U(0, 0.9, -1.0), lens=14)
     shot(OUT, 'side_easel', U(-1.7, 1.3, -0.2), U(0.3, 1.1, 0.2), lens=18)
     hide = [o for o in scene.objects if o.name.startswith(('Ceiling', 'Cornice'))]
     for o in hide: o.hide_render = True
-    shot(OUT, 'top', U(0, 9, -0.7), U(0, 0, -0.701), ortho=5.0)
-    shot(OUT, 'iso', U(3.0, 5.0, -4.8), U(0, 0.6, -0.8), lens=22)
+    shot(OUT, 'top', U(0, 9, (ZN + 1.6) / 2), U(0, 0, (ZN + 1.6) / 2 - 0.001), ortho=max(XW - XE, (1.6 - ZN) * 1.6) * 1.1)   # 1280x800: height = 0.625 x width
+    shot(OUT, 'iso', U(3.0 + GROW_W, 5.0, -4.8 - GROW_N), U(0, 0.6, -0.8), lens=22)
     for o in hide: o.hide_render = False
     for mo in markers: bpy.data.objects.remove(mo)
 
