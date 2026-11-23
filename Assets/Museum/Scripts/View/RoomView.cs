@@ -42,6 +42,9 @@ namespace VirtualMuseum.App
             }
         }
 
+        /// <summary>Height of the walls as currently drawn (full when expanded, low plan walls otherwise).</summary>
+        public float DrawnWallHeight => Data == null ? 0f : expanded ? Data.height : Mathf.Min(lowWallHeight, Data.height);
+
         /// <param name="labelHeight">World height of the name label in metres; 0 = no label.</param>
         public void Init(string roomId, Material floorMaterial, Material wallMaterial, float wallThickness, float lowWallHeight,
                          bool wallColliders, float labelHeight)
@@ -116,6 +119,17 @@ namespace VirtualMuseum.App
             floor.GetComponent<Collider>().enabled = !open;
             if (holeParts != null) foreach (var p in holeParts) p.gameObject.SetActive(open);
             Layout();
+        }
+
+        /// <summary>Replace the walls' material (e.g. translucent on the miniature); they then cast no shadow.</summary>
+        public void SetWallMaterial(Material material)
+        {
+            foreach (var w in new[] { wallN, wallS, wallE, wallW })
+            {
+                var r = w.GetComponent<Renderer>();
+                r.sharedMaterial = material;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
         }
 
         /// <summary>Floor highlight (hover / selection / target); null restores the material colour.</summary>

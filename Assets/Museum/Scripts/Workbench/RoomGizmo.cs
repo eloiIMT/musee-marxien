@@ -15,7 +15,7 @@ namespace VirtualMuseum.App
     /// </summary>
     public class RoomGizmo : MonoBehaviour
     {
-        const float MoveSize = 0.035f, CornerSize = 0.022f, DeleteSize = 0.03f;
+        const float MoveSize = 0.035f, CornerSize = 0.036f, DeleteSize = 0.05f;
 
         Maquette maquette;
         RoomView room;

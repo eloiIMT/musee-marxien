@@ -26,7 +26,7 @@ namespace VirtualMuseum.App
         const float PanelW = 516, PanelH = 116, PanelR = 32;
         const float TrackW = 488, TrackH = 56, TrackY = 14;
         const float SegW = 160, SegH = 48, FooterY = -33, FooterW = 472;
-        const float IconSize = 18, IconGap = 6;
+        const float IconSize = 18, IconGap = 6, JoystickSize = 28;
         // Thumbstick flick: fire above Press, re-arm below Release.
         const float Press = 0.6f, Release = 0.3f;
         const float PillSmoothTime = 0.06f;
@@ -38,7 +38,7 @@ namespace VirtualMuseum.App
         static readonly string[] Hints =
         {
             "Gâchette sur une salle pour la bouger",
-            "Cubes jaunes : largeur / longueur · slider : hauteur",
+            "Cubes jaunes : taille · slider : hauteur",
             "Gâchette sur une salle : relier / délier",
         };
 
@@ -199,8 +199,11 @@ namespace VirtualMuseum.App
             }
 
             float left = -FooterW / 2f, right = FooterW / 2f;
-            // Joystick icon on the left, help of the current mode on the right.
-            Icon(t, IconKind.Joystick, 16, left + 8, FooterY, -0.002f, TextMuted);
+            // Joystick icon + "Joystick droit" on the left, help of the current mode on the right.
+            Icon(t, IconKind.Joystick, JoystickSize, left + JoystickSize / 2f, FooterY, -0.002f, TextMuted);
+            var stickLabel = UiKit.Text(t, "Joystick droit", Px(left + JoystickSize + IconGap, FooterY, -0.002f), LineHeight(12),
+                                        TextColor(TextMuted), TextAnchor.MiddleLeft, TextAlignment.Left);
+            stickLabel.fontStyle = FontStyle.Bold;
             hint = UiKit.Text(t, "", Px(right, FooterY, -0.002f), LineHeight(12), TextColor(TextMuted), TextAnchor.MiddleRight, TextAlignment.Right);
         }
     }

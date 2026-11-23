@@ -82,6 +82,13 @@ namespace VirtualMuseum.App
         /// </summary>
         public static (Vector3 centre, Vector3 normal, float length) ChooseWall(Room room, Museum museum)
         {
+            var (local, n, len) = ChooseWallLocal(room, museum);
+            return (MuseumSpatial.ToMuseum(room, local), room.rotation * n, len);
+        }
+
+        /// <summary>Same as <see cref="ChooseWall"/>, in room-local coordinates; <paramref name="ignoreArtworkId"/> is left out.</summary>
+        public static (Vector3 centre, Vector3 normal, float length) ChooseWallLocal(Room room, Museum museum, string ignoreArtworkId = null)
+        {
             var walls = new[]
             {
                 (n: Vector3.back, half: room.length / 2f, len: room.width),
@@ -97,7 +104,7 @@ namespace VirtualMuseum.App
                 float score = len < 1.6f ? 100f : 0f;
                 foreach (var a in museum.artworks)
                 {
-                    if (a.roomId != room.id) continue;
+                    if (a.roomId != room.id || a.id == ignoreArtworkId) continue;
                     float toWall = half - Vector3.Dot(a.localPosition, n);              // distance from the wall plane
                     float along = Vector3.Dot(a.localPosition, Vector3.Cross(Vector3.up, n)); // offset along the wall
                     if (toWall < 1.2f && Mathf.Abs(along) < 0.9f) score += 1f;
@@ -106,8 +113,7 @@ namespace VirtualMuseum.App
                 if (score < bestScore) { bestScore = score; best = i; }
             }
             var w = walls[best];
-            var local = w.n * (w.half - WallHalfThickness);
-            return (MuseumSpatial.ToMuseum(room, local), room.rotation * w.n, w.len);
+            return (w.n * (w.half - WallHalfThickness), w.n, w.len);
         }
 
         void Place(string id)

@@ -58,6 +58,7 @@ namespace VirtualMuseum.App
         ModeSelector modeSelector;
 
         RoomGizmo gizmo;
+        Material translucentWall;
         TextMesh toast;
         float toastUntil;
         readonly HashSet<RoomView> wiredRooms = new();
@@ -66,6 +67,8 @@ namespace VirtualMuseum.App
         void Awake()
         {
             View = GetComponent<MuseumView>();
+            // Translucent walls: the user sees (and, walls having no collider here, acts) through them.
+            translucentWall = Resources.Load<Material>("MiniatureWall");
             if (handleMaterial == null)
                 handleMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color"));
             if (TriggerRouter.Instance == null && FindAnyObjectByType<TriggerRouter>() == null)
@@ -182,6 +185,8 @@ namespace VirtualMuseum.App
             {
                 if (!wiredRooms.Add(rv)) continue;
                 var id = rv.RoomId;
+                if (translucentWall != null) rv.SetWallMaterial(translucentWall);
+                rv.gameObject.AddComponent<StationMarker>();
                 var c = rv.Floor.AddComponent<Clickable>();
                 c.Clicked += (_, _) => OnRoomClicked(id);
                 c.HoverChanged += hovered =>
@@ -211,6 +216,14 @@ namespace VirtualMuseum.App
                     handle.ArtworkId = pair.Key;
                     handle.Init(this, Color.white);
                 }
+            }
+
+            // Where each room's wall plan and lever will be (they depend on the artworks: re-placed on every change).
+            var data = Api.Data;
+            foreach (var rv in View.Rooms.Values)
+            {
+                var marker = rv != null ? rv.GetComponent<StationMarker>() : null;
+                if (marker != null) marker.Apply(rv.Data, data, handleMaterial);
             }
 
             if (SelectedRoomId != null && View.GetRoomView(SelectedRoomId) == null) SelectRoom(null);
@@ -293,14 +306,10 @@ namespace VirtualMuseum.App
         }
 
         /// <summary>
-        /// The mode selector (on the controller) is shown while a room is selected. With nothing
-        /// selected the user is back in the Move mode, so the next selection starts there.
+        /// The mode selector (on the controller) is shown while a room is selected. The chosen mode is kept when the
+        /// selection changes or clears, so the next selection starts in the mode the user picked.
         /// </summary>
-        void SyncModeSelector()
-        {
-            if (SelectedRoomId == null && Mode != EditMode.Move) SetMode(EditMode.Move);
-            UpdateModeSelectorVisibility();
-        }
+        void SyncModeSelector() => UpdateModeSelectorVisibility();
 
         /// <summary>
         /// Selector shown only while something is selected AND a hand's ray points at the plan board: pointing
@@ -363,7 +372,8 @@ namespace VirtualMuseum.App
                 bool hovered = id == HoveredRoomId;
                 rv.Expanded = selected || hovered;
                 Color? tint = null;
-                if (selected) tint = selectedColor;
+                // Blue floor = "grab it to move it": only in the Move mode (the floor is not grabbable otherwise).
+                if (selected) tint = Mode == EditMode.Move ? selectedColor : null;
                 else if (linking)
                 {
                     // Link mode: linked rooms green; hovering shows what the trigger will do (link / unlink).
@@ -383,6 +393,29 @@ namespace VirtualMuseum.App
                 else Tint.Clear(r);
             }
             gizmo.Attach(View.GetRoomView(SelectedRoomId));
+        }
+
+        // ---------------------------------------------------------------- reserved area
+
+        string reservedZoneRoomId;
+
+        /// <summary>
+        /// Show the outline of the area kept free in front of a room's wall plan and lever (an artwork is being dragged
+        /// into it), or hide it (null). Only one room at a time.
+        /// </summary>
+        public void ShowReservedZone(string roomId)
+        {
+            if (roomId == reservedZoneRoomId) return;
+            SetZoneVisible(reservedZoneRoomId, false);
+            reservedZoneRoomId = roomId;
+            SetZoneVisible(roomId, true);
+        }
+
+        void SetZoneVisible(string roomId, bool visible)
+        {
+            var rv = View.GetRoomView(roomId);
+            var marker = rv != null ? rv.GetComponent<StationMarker>() : null;
+            if (marker != null) marker.ShowZone(visible);
         }
 
         // ---------------------------------------------------------------- coordinates

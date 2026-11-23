@@ -21,7 +21,6 @@ namespace VirtualMuseum.App
     public class ElevatorRide : MonoBehaviour
     {
         const float RoomFloorThickness = 0.05f; // RoomView.FloorThickness
-        const float PlanHalfWidth = 0.475f;     // RoomPlan.BoardWidth / 2
         const float PlanCentreHeight = 1.5f;    // RoomPlan.BoardCenterY
 
         [Header("Workshop station (in the scene)")]
@@ -97,7 +96,7 @@ namespace VirtualMuseum.App
         // ---------------------------------------------------------------- museum station: beside the wall plan
 
         /// <summary>
-        /// Lever on the plan's wall, beside the plan (the side away from artworks), at head height; opening, tube and
+        /// Lever on the plan's wall, on the plan's right, at head height; opening, tube and
         /// platform at its foot, against the wall. Left alone during a ride in the museum unless <paramref name="force"/>.
         /// </summary>
         void PlaceMuseumStation(bool force)
@@ -114,17 +113,13 @@ namespace VirtualMuseum.App
             museumShaft.gameObject.SetActive(rv != null && room != null);
             if (rv == null || room == null) return;
 
-            var (centre, normal, wallLength) = RoomPlan.ChooseWall(room, mode.Guide.Data);
-            var along = Vector3.Cross(Vector3.up, normal);            // museum: the plan's right
+            // Same layout as the markers on the organizer's plan (MuseumStation): lever always on the plan's right.
             float r = museumShaft.Radius;
-            // lever beside the plan, but the platform must stay off the side walls
-            float offset = Mathf.Min(PlanHalfWidth + 0.3f, wallLength / 2f - r - 0.15f);
-            var unrotate = Quaternion.Inverse(room.rotation);
-            Vector2 Local(Vector3 museumPoint) { var p = unrotate * (museumPoint - room.position); return new Vector2(p.x, p.z); }
-            var rightSpot = Local(centre + along * offset - normal * (r + 0.08f));
-            var leftSpot = Local(centre - along * offset - normal * (r + 0.08f));
-            int side = ElevatorGeometry.LeverSide(rightSpot, leftSpot, Footprints(room, rv));
-            var spot = side > 0 ? rightSpot : leftSpot;
+            var station = MuseumStation.Compute(room, mode.Guide.Data, r);
+            var normal = room.rotation * station.normal; // museum space
+            int side = station.side;
+            float offset = station.offset;
+            var spot = station.spot;
 
             rv.SetFloorHole(spot, r);
             museumShaft.transform.SetPositionAndRotation(rv.transform.TransformPoint(new Vector3(spot.x, 0, spot.y)), rv.transform.rotation);
@@ -132,39 +127,6 @@ namespace VirtualMuseum.App
             awayFromWall = -mode.Immersive.transform.TransformDirection(normal);
             if (museumLever != null) // plan frame: x = along the wall (right), z = into the wall, origin 0.03 off the wall
                 museumLever.transform.SetLocalPositionAndRotation(new Vector3(side * offset, leverHeight - PlanCentreHeight, 0.03f), Quaternion.identity);
-        }
-
-        /// <summary>Room-local footprints of the room's artworks (as drawn, labels included).</summary>
-        List<Rect> Footprints(Room room, RoomView rv)
-        {
-            var list = new List<Rect>();
-            foreach (var a in mode.Guide.Data.artworks)
-            {
-                if (a.roomId != room.id) continue;
-                if (rv.Artworks.TryGetValue(a.id, out var go) && go != null && TryFootprint(go, rv.transform, out var rect)) list.Add(rect);
-                else list.Add(new Rect(a.localPosition.x - 0.4f, a.localPosition.z - 0.4f, 0.8f, 0.8f));
-            }
-            return list;
-        }
-
-        static bool TryFootprint(GameObject go, Transform roomFrame, out Rect rect)
-        {
-            rect = default;
-            bool any = false;
-            float x0 = 0, x1 = 0, z0 = 0, z1 = 0;
-            foreach (var r in go.GetComponentsInChildren<Renderer>())
-            {
-                var b = r.bounds;
-                for (int i = 0; i < 8; i++)
-                {
-                    var c = new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z);
-                    var p = roomFrame.InverseTransformPoint(c);
-                    if (!any) { x0 = x1 = p.x; z0 = z1 = p.z; any = true; }
-                    else { x0 = Mathf.Min(x0, p.x); x1 = Mathf.Max(x1, p.x); z0 = Mathf.Min(z0, p.z); z1 = Mathf.Max(z1, p.z); }
-                }
-            }
-            if (any) rect = Rect.MinMaxRect(x0, z0, x1, z1);
-            return any;
         }
 
         // ---------------------------------------------------------------- workshop -> museum

@@ -4,23 +4,24 @@ namespace VirtualMuseum.App
 {
     /// <summary>
     /// Trash icon on the gizmo (flat, always facing the camera): first trigger click asks for confirmation
-    /// (shows how many artworks will be lost), a second click within 3 s deletes the room.
-    /// The icon grows on hover and pulses while confirmation is pending.
+    /// (shows how many artworks will be lost) and turns the icon into a white check mark on the same red disc; a second click within 3 s
+    /// deletes the room. The icon grows on hover and pulses while confirmation is pending.
     /// </summary>
     public class DeleteButton : MonoBehaviour
     {
         const float ConfirmWindow = 3f;
         const float HoverScale = 1.2f, PulseAmount = 0.15f, PulseSpeed = 10f;
 
-        static Material iconMaterial;
+        static Material iconMaterial, confirmMaterial;
 
         Maquette maquette;
         Clickable clickable;
         Transform icon;
+        Renderer iconRenderer;
         string pendingRoomId;
         float deadline;
 
-        bool Pending => pendingRoomId != null && Time.time <= deadline;
+        bool Pending => pendingRoomId != null && pendingRoomId == maquette.SelectedRoomId && Time.time <= deadline;
 
         /// <summary>Builds a 1×1 trash icon centred on its pivot, under <paramref name="parent"/>.</summary>
         public static DeleteButton Create(Transform parent, Maquette owner)
@@ -40,6 +41,7 @@ namespace VirtualMuseum.App
 
             var button = root.AddComponent<DeleteButton>();
             button.icon = quad.transform;
+            button.iconRenderer = quad.GetComponent<Renderer>();
             button.Init(owner);
             return button;
         }
@@ -53,6 +55,9 @@ namespace VirtualMuseum.App
 
         void Update()
         {
+            // After the first click the trash turns into a red "confirm" check mark until the window closes.
+            var material = Pending ? ConfirmMaterial() : IconMaterial();
+            if (iconRenderer.sharedMaterial != material) iconRenderer.sharedMaterial = material;
             float s = Pending ? 1f + PulseAmount * (0.5f + 0.5f * Mathf.Sin(Time.time * PulseSpeed))
                     : clickable.IsHovered ? HoverScale : 1f;
             icon.localScale = Vector3.one * s;
@@ -76,39 +81,68 @@ namespace VirtualMuseum.App
             pendingRoomId = id;
             deadline = Time.time + ConfirmWindow;
             int count = maquette.Api.GetArtworksInRoom(id).Count;
-            maquette.Toast($"Supprimer « {room.name} »{(count > 0 ? $" et ses {count} œuvre(s)" : "")} ?\nCliquez à nouveau pour confirmer", true);
+            maquette.Toast($"Supprimer « {room.name} »{(count > 0 ? $" et ses {count} œuvre(s)" : "")} ?\nCliquez sur la coche pour confirmer", true);
         }
 
         // ---------- Icon texture (drawn in code, no asset needed) ----------
 
+        // Unity null checks (not ??=): a material destroyed with the scene must be rebuilt, not reused.
         static Material IconMaterial()
         {
-            if (iconMaterial != null) return iconMaterial;
-            var tex = DrawTrashIcon(128);
-            var urp = Shader.Find("Universal Render Pipeline/Unlit");
-            if (urp != null)
-            {
-                iconMaterial = new Material(urp) { name = "Trash Icon (runtime)" };
-                iconMaterial.SetTexture("_BaseMap", tex);
-                // Alpha clipping cuts the transparent corners around the disc.
-                iconMaterial.SetFloat("_AlphaClip", 1f);
-                iconMaterial.SetFloat("_Cutoff", 0.5f);
-                iconMaterial.EnableKeyword("_ALPHATEST_ON");
-            }
-            else
-            {
-                iconMaterial = new Material(Shader.Find("Unlit/Transparent Cutout")) { name = "Trash Icon (runtime)" };
-            }
-            iconMaterial.mainTexture = tex;
+            if (iconMaterial == null) iconMaterial = CutoutMaterial(DrawIcon(128, new Color(0.9f, 0.15f, 0.15f, 1f), Sample), "Trash Icon (runtime)");
             return iconMaterial;
         }
 
-        /// <summary>White trash can on a red disc, 4× supersampled for smooth edges.</summary>
-        static Texture2D DrawTrashIcon(int size)
+        /// <summary>White check mark on the same red disc as the trash.</summary>
+        static Material ConfirmMaterial()
         {
-            var red = new Color(0.9f, 0.15f, 0.15f, 1f);
-            var white = Color.white;
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, name = "TrashIcon" };
+            if (confirmMaterial == null) confirmMaterial = CutoutMaterial(DrawIcon(128, new Color(0.9f, 0.15f, 0.15f, 1f), SampleCheck), "Confirm Icon (runtime)");
+            return confirmMaterial;
+        }
+
+        static Material CutoutMaterial(Texture2D tex, string materialName)
+        {
+            Material material;
+            var urp = Shader.Find("Universal Render Pipeline/Unlit");
+            if (urp != null)
+            {
+                material = new Material(urp) { name = materialName };
+                material.SetTexture("_BaseMap", tex);
+                // Alpha clipping cuts the transparent corners around the disc.
+                material.SetFloat("_AlphaClip", 1f);
+                material.SetFloat("_Cutoff", 0.5f);
+                material.EnableKeyword("_ALPHATEST_ON");
+            }
+            else
+            {
+                material = new Material(Shader.Find("Unlit/Transparent Cutout")) { name = materialName };
+            }
+            material.mainTexture = tex;
+            return material;
+        }
+
+        /// <summary>White check mark on a disc of <paramref name="bg"/>.</summary>
+        static Color SampleCheck(float u, float v, Color bg, Color fg)
+        {
+            float dx = u - 0.5f, dy = v - 0.5f;
+            if (dx * dx + dy * dy > 0.48f * 0.48f) return Color.clear;
+            var p = new Vector2(u, v);
+            const float half = 0.055f;
+            bool OnSegment(Vector2 a, Vector2 b)
+            {
+                var ab = b - a;
+                float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / ab.sqrMagnitude);
+                return (a + t * ab - p).sqrMagnitude <= half * half;
+            }
+            var corner = new Vector2(0.43f, 0.3f);
+            return OnSegment(new Vector2(0.26f, 0.5f), corner) || OnSegment(corner, new Vector2(0.75f, 0.7f)) ? fg : bg;
+        }
+
+        /// <summary>White icon on a disc of <paramref name="bg"/>, 4× supersampled for smooth edges.</summary>
+        static Texture2D DrawIcon(int size, Color bg, System.Func<float, float, Color, Color, Color> sample)
+        {
+            var fg = Color.white;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, name = "GizmoIcon" };
             var pixels = new Color[size * size];
             const int ss = 4;
             for (int y = 0; y < size; y++)
@@ -119,7 +153,7 @@ namespace VirtualMuseum.App
                 for (int sx = 0; sx < ss; sx++)
                 {
                     float u = (x + (sx + 0.5f) / ss) / size, v = (y + (sy + 0.5f) / ss) / size;
-                    sum += Sample(u, v, red, white);
+                    sum += sample(u, v, bg, fg);
                 }
                 pixels[y * size + x] = sum / (ss * ss);
             }

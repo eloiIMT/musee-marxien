@@ -54,6 +54,7 @@ namespace VirtualMuseum.App
             {
                 reason = "Relâchez dans une salle";
                 Maquette.Ghost.Show(p, 0f, GhostSize, GhostSize, false, reason);
+                Maquette.ShowReservedZone(null);
                 return;
             }
 
@@ -69,6 +70,9 @@ namespace VirtualMuseum.App
                 d.y = 0f;
                 if (d.magnitude < ArtworkMargin) { reason = "Trop proche d'une autre œuvre (0,8 m min.)"; break; }
             }
+            bool reserved = MuseumStation.IsReserved(targetRoom, museum, local, art.id);
+            if (reason == null && reserved) reason = MuseumStation.ReservedReason;
+            Maquette.ShowReservedZone(reserved ? targetRoom.id : null); // the no-go area shows only while aimed at
             valid = reason == null;
             string text = reason ?? (targetRoom.id != art.roomId ? $"→ {targetRoom.name}" : art.title);
             var center = MuseumSpatial.ToMuseum(targetRoom, new Vector3(local.x, 0f, local.z));
@@ -101,6 +105,7 @@ namespace VirtualMuseum.App
         void Cleanup()
         {
             Maquette.Ghost.Hide();
+            Maquette.ShowReservedZone(null);
         }
 
         float HandYaw(Quaternion handRotation) => Maquette.HandTwist(handRotation);

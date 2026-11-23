@@ -55,6 +55,7 @@ namespace VirtualMuseum.App
             foreach (var i in FindObjectsByType<NearFarInteractor>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (i.handedness == InteractorHandedness.None || !remapped.Add(i)) continue;
+                if (i.GetComponent<PushHeldAway>() == null) i.gameObject.AddComponent<PushHeldAway>();
                 var select = i.selectInput;
                 i.selectInput = i.activateInput;
                 i.activateInput = select;
