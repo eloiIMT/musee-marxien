@@ -295,13 +295,13 @@ TextMesh:
     en 3D)\n  G\xE2chette sur le plan vide : d\xE9s\xE9lectionner\n  Bouton vert
     \xAB Nouvelle salle \xBB puis g\xE2chette sur le plan : cr\xE9er\n  Grip sur
     le sol d'une salle (ou sph\xE8re bleue) : d\xE9placer \xB7 poignet : 15\xB0\n 
-    Grip cubes jaunes (coins) : largeur / longueur\n  Grip cylindre vert, tirer vers
-    soi : hauteur\n  Cube rouge, 2 clics : supprimer la salle\n\nConnexions\n  Grip
-    sph\xE8re orange, rel\xE2cher sur une salle : relier\n  G\xE2chette sur un c\xE2ble
-    puis cube rouge : d\xE9connecter\n\n\u0152uvres (salle s\xE9lectionn\xE9e)\n 
-    Grip sur l'\u0153uvre : d\xE9placer \xB7 pr\xE8s d'un mur : aimant\xE9e\n  Rel\xE2cher
-    dans une autre salle : transf\xE9rer\n\nVert = possible \xB7 Rouge = refus\xE9
-    (retour en place)"
+    Grip cubes jaunes (coins) : largeur / longueur\n  Slider \xAB Hauteur \xBB sur
+    le mur du bas : grip et glisser, ou g\xE2chette\n  Cube rouge, 2 clics : supprimer
+    la salle\n\nConnexions\n  Grip sph\xE8re orange, rel\xE2cher sur une salle :
+    relier\n  G\xE2chette sur un c\xE2ble puis cube rouge : d\xE9connecter\n\n\u0152uvres
+    (salle s\xE9lectionn\xE9e)\n  Grip sur l'\u0153uvre : d\xE9placer \xB7 pr\xE8s
+    d'un mur : aimant\xE9e\n  Rel\xE2cher dans une autre salle : transf\xE9rer\n\nVert
+    = possible \xB7 Rouge = refus\xE9 (retour en place)"
   m_OffsetZ: 0
   m_CharacterSize: 0.0042
   m_LineSpacing: 1

@@ -49,6 +49,11 @@ namespace VirtualMuseum.App
         /// <summary>Raised when the selected room or connection changes (for the screen UI).</summary>
         public event Action SelectionChanged;
 
+        /// <summary>Which handles the user works with (picked with the mode selector above the board).</summary>
+        public EditMode Mode { get; private set; } = EditMode.Move;
+        public event Action ModeChanged;
+        ModeSelector modeSelector;
+
         string targetRoomId;
         RoomGizmo gizmo;
         Transform disconnectButton;
@@ -87,6 +92,7 @@ namespace VirtualMuseum.App
             }
             toast = Labels.Create(transform.parent != null ? transform.parent : null, "", 0.035f, Color.white);
             toast.gameObject.name = "Toast";
+            modeSelector = ModeSelector.Create(transform.parent, this);
         }
 
         void Start()
@@ -151,6 +157,7 @@ namespace VirtualMuseum.App
             transform.rotation = bt.rotation * Quaternion.Euler(-90f, 0f, 0f);
             var front = bt.position - bt.forward * (bt.lossyScale.z / 2f + 0.002f);
             transform.position = front - transform.rotation * new Vector3(center.x, 0f, center.z) * scale;
+            modeSelector.Board = bt;
             toast.transform.position = bt.position + bt.up * (boardHeight / 2f + 0.08f) - bt.forward * 0.05f;
             View.Refresh(); // cable widths and handle sizes depend on scale
         }
@@ -206,14 +213,44 @@ namespace VirtualMuseum.App
                     var key = pair.Key;
                     var hit = new GameObject("Hit", typeof(BoxCollider));
                     hit.transform.SetParent(pair.Value.transform, false);
-                    hit.AddComponent<Clickable>().Clicked += (_, _) => SelectConnection(key);
+                    hit.AddComponent<Clickable>().Clicked += (_, _) => { if (Mode == EditMode.Link) SelectConnection(key); };
                 }
                 FitCableCollider(pair.Value);
             }
 
             if (SelectedRoomId != null && View.GetRoomView(SelectedRoomId) == null) SelectRoom(null);
             if (SelectedConnection != null && !View.Cables.ContainsKey(SelectedConnection)) SelectConnection(null);
+            ApplyModeToHandles();
             UpdateVisuals();
+        }
+
+        // ---------------------------------------------------------------- edit mode
+
+        public void SetMode(EditMode mode)
+        {
+            if (mode == Mode) return;
+            Mode = mode;
+            if (mode != EditMode.Link && SelectedConnection != null) SelectConnection(null);
+            ApplyModeToHandles();
+            ModeChanged?.Invoke();
+        }
+
+        /// <summary>Grabbing a room floor or an artwork moves it: only in the Move mode.</summary>
+        void ApplyModeToHandles()
+        {
+            bool move = Mode == EditMode.Move;
+            foreach (var rv in View.Rooms.Values)
+            {
+                if (rv == null) continue;
+                var floorMove = rv.Floor.GetComponent<MoveHandle>();
+                if (floorMove != null) floorMove.enabled = move;
+                foreach (var go in rv.Artworks.Values)
+                {
+                    if (go == null) continue;
+                    var handle = go.GetComponent<ArtworkHandle>();
+                    if (handle != null) handle.enabled = move;
+                }
+            }
         }
 
         static void FitCableCollider(LineRenderer line)
@@ -234,6 +271,7 @@ namespace VirtualMuseum.App
         {
             SelectedRoomId = roomId;
             SelectedConnection = null;
+            SyncModeSelector();
             UpdateVisuals();
             SelectionChanged?.Invoke();
         }
@@ -242,6 +280,7 @@ namespace VirtualMuseum.App
         {
             SelectedConnection = key;
             if (key != null) SelectedRoomId = null;
+            SyncModeSelector();
             UpdateVisuals();
             SelectionChanged?.Invoke();
         }
@@ -251,8 +290,20 @@ namespace VirtualMuseum.App
             if (SelectedRoomId == null && SelectedConnection == null) return;
             SelectedRoomId = null;
             SelectedConnection = null;
+            SyncModeSelector();
             UpdateVisuals();
             SelectionChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// The mode selector (on the controller) is shown while a room or a connection is selected. With nothing
+        /// selected the user is back in the Move mode, so the next selection starts there.
+        /// </summary>
+        void SyncModeSelector()
+        {
+            bool show = SelectedRoomId != null || SelectedConnection != null;
+            if (!show && Mode != EditMode.Move) SetMode(EditMode.Move);
+            if (modeSelector != null && modeSelector.gameObject.activeSelf != show) modeSelector.gameObject.SetActive(show);
         }
 
         /// <summary>Highlight a room as a drop target (connection drag); null clears.</summary>

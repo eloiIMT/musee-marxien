@@ -17,6 +17,9 @@ namespace VirtualMuseum.App
         protected Maquette Maquette { get; private set; }
         protected Transform Hand { get; private set; }
         public bool IsDragging => Hand != null;
+        protected bool IsHovered => hovered;
+        /// <summary>Origin of the drawn XRI ray of the grabbing hand (falls back to the hand itself).</summary>
+        protected Transform RayTransform => rayOrigin != null ? rayOrigin : Hand;
 
         XRSimpleInteractable interactable;
         Renderer rend;
@@ -44,6 +47,8 @@ namespace VirtualMuseum.App
             if (interactable == null) interactable = gameObject.AddComponent<XRSimpleInteractable>();
             interactable.selectEntered.AddListener(a =>
             {
+                // A disabled handle (e.g. not available in the current edit mode) ignores the grip.
+                if (!isActiveAndEnabled) return;
                 Hand = a.interactorObject.transform;
                 // Cast from the same origin as the drawn XRI ray, so the object stays under its visible end.
                 rayOrigin = a.interactorObject is ICurveInteractionDataProvider curve ? curve.curveOrigin : null;
@@ -57,7 +62,7 @@ namespace VirtualMuseum.App
                 if (a.isCanceled) CancelDrag(); else EndDrag();
                 Refresh();
             });
-            interactable.hoverEntered.AddListener(_ => { hovered = true; Refresh(); });
+            interactable.hoverEntered.AddListener(_ => { hovered = isActiveAndEnabled; Refresh(); });
             interactable.hoverExited.AddListener(_ => { hovered = false; Refresh(); });
         }
 

@@ -334,21 +334,22 @@ namespace VirtualMuseum.AppEditor
             "MAQUETTE — COMMANDES\n" +
             "\n" +
             "Rayon : pointer · Gâchette : cliquer · Grip : saisir\n" +
+            "Salle sélectionnée : joystick droit ← → = mode Déplacer / Hauteur / Liaison\n" +
             "\n" +
             "Salles\n" +
             "  Gâchette sur une salle : sélectionner (passe en 3D)\n" +
             "  Gâchette sur le plan vide : désélectionner\n" +
             "  Bouton vert « Nouvelle salle » puis gâchette sur le plan : créer\n" +
-            "  Grip sur le sol d'une salle (ou sphère bleue) : déplacer · poignet : 15°\n" +
-            "  Grip cubes jaunes (coins) : largeur / longueur\n" +
-            "  Grip cylindre vert, tirer vers soi : hauteur\n" +
+            "  Déplacer · grip sur le sol (ou sphère bleue) : bouger · poignet : 15°\n" +
+            "  Déplacer · grip cubes jaunes (coins) : largeur / longueur\n" +
+            "  Hauteur · slider sur le mur du bas : grip et glisser, ou gâchette\n" +
             "  Cube rouge, 2 clics : supprimer la salle\n" +
             "\n" +
             "Connexions\n" +
-            "  Grip sphère orange, relâcher sur une salle : relier\n" +
-            "  Gâchette sur un câble puis cube rouge : déconnecter\n" +
+            "  Liaison · grip sphère orange, relâcher sur une salle : relier\n" +
+            "  Liaison · gâchette sur un câble puis cube rouge : déconnecter\n" +
             "\n" +
-            "Œuvres (salle sélectionnée)\n" +
+            "Œuvres (salle sélectionnée, mode Déplacer)\n" +
             "  Grip sur l'œuvre : déplacer · près d'un mur : aimantée\n" +
             "  Relâcher dans une autre salle : transférer\n" +
             "\n" +
