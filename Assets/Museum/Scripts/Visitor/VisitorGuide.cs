@@ -6,7 +6,7 @@ namespace VirtualMuseum.App
 {
     /// <summary>
     /// Visitor-side state: which room the user is in (head inside a room footprint), and the artworks of the
-    /// life-size museum made pointable with their floor-standing label (<see cref="ArtworkTarget"/>).
+    /// life-size museum given their floor-standing label (<see cref="ArtworkTarget"/>; the artworks stay inert).
     /// No floating text: every text the visitor reads is part of the world (labels, wall plan).
     /// Locomotion (how to move) is in <see cref="VisitorMode"/> / the XR rig.
     /// </summary>
@@ -54,7 +54,7 @@ namespace VirtualMuseum.App
             StateChanged?.Invoke();
         }
 
-        /// <summary>After each immersive refresh: make new artworks pointable and re-layout every label.</summary>
+        /// <summary>After each immersive refresh: give new artworks their label and re-layout every label.</summary>
         void WireArtworks()
         {
             Data = Api.Data;

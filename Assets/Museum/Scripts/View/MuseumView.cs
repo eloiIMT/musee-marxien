@@ -35,6 +35,8 @@ namespace VirtualMuseum.App
         [Tooltip("Cable width in museum metres (compensated for this object's scale).")]
         [SerializeField] float cableWidth = 0.15f;
         [SerializeField] float cableHeight = 0.2f;
+        [Tooltip("Off on the life-size museum: connections are an editing aid, the visitor never sees them.")]
+        [SerializeField] bool showCables = true;
 
         readonly Dictionary<string, RoomView> rooms = new();
         readonly Dictionary<string, LineRenderer> cables = new();
@@ -58,6 +60,7 @@ namespace VirtualMuseum.App
             if (backend == null) backend = FindAnyObjectByType<MuseumBackend>();
             roomsRoot = CreateChild("Rooms");
             cablesRoot = CreateChild("Connections");
+            cablesRoot.gameObject.SetActive(showCables);
         }
 
         void OnEnable()

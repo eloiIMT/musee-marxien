@@ -88,7 +88,14 @@ namespace VirtualMuseum.App
             {
                 var c = board.GetComponent<Clickable>();
                 if (c == null) c = board.gameObject.AddComponent<Clickable>();
-                c.Clicked += (_, _) => ClearSelection();
+                // Click on the empty plan: deselect, or with nothing selected create a room under the skeleton.
+                var creator = gameObject.AddComponent<RoomCreator>();
+                creator.Init(c);
+                c.Clicked += (_, interactor) =>
+                {
+                    if (SelectedRoomId != null || SelectedConnection != null) ClearSelection();
+                    else creator.Click(interactor);
+                };
             }
             toast = Labels.Create(transform.parent != null ? transform.parent : null, "", 0.035f, Color.white);
             toast.gameObject.name = "Toast";
@@ -118,6 +125,13 @@ namespace VirtualMuseum.App
         {
             if (toast != null && toast.gameObject.activeSelf && Time.time > toastUntil) toast.gameObject.SetActive(false);
             UpdateDisconnectButton();
+            UpdateModeSelectorVisibility();
+        }
+
+        void OnDisable()
+        {
+            // The selector lives on the controller, outside the workshop: hide it with the workshop (visitor view).
+            if (modeSelector != null) modeSelector.gameObject.SetActive(false);
         }
 
         void OnModelChanged(MuseumChange change)
@@ -179,7 +193,7 @@ namespace VirtualMuseum.App
                     else if (HoveredRoomId == id) HoveredRoomId = null;
                     UpdateVisuals();
                 };
-                // Grip on the floor = grab and move the room directly, no prior selection needed.
+                // Trigger on the floor = grab and move the room directly, no prior selection needed.
                 var move = rv.Floor.AddComponent<MoveHandle>();
                 move.FixedRoomId = id;
                 move.InitWithoutTint(this);
@@ -301,9 +315,59 @@ namespace VirtualMuseum.App
         /// </summary>
         void SyncModeSelector()
         {
-            bool show = SelectedRoomId != null || SelectedConnection != null;
-            if (!show && Mode != EditMode.Move) SetMode(EditMode.Move);
-            if (modeSelector != null && modeSelector.gameObject.activeSelf != show) modeSelector.gameObject.SetActive(show);
+            bool selected = SelectedRoomId != null || SelectedConnection != null;
+            if (!selected && Mode != EditMode.Move) SetMode(EditMode.Move);
+            UpdateModeSelectorVisibility();
+        }
+
+        /// <summary>
+        /// Selector shown only while something is selected AND a hand's ray points at the plan board: pointing
+        /// elsewhere gives the right stick back to turning.
+        /// </summary>
+        void UpdateModeSelectorVisibility()
+        {
+            if (modeSelector == null) return;
+            bool show = isActiveAndEnabled && (SelectedRoomId != null || SelectedConnection != null) && IsRayOnBoard();
+            if (modeSelector.gameObject.activeSelf != show) modeSelector.gameObject.SetActive(show);
+        }
+
+        UnityEngine.XR.Interaction.Toolkit.Interactors.XRBaseInteractor[] rayInteractors;
+        float nextInteractorSearch;
+
+        /// <summary>
+        /// Does a hand's ray (as drawn by XRI) cross the plan board (10 cm margin)? True only in a scene without any
+        /// hand ray interactor; false while the controllers are not tracked (their interactors are inactive).
+        /// </summary>
+        bool IsRayOnBoard()
+        {
+            if (board == null) return true;
+            // Inactive ones included: the controllers' objects are disabled until tracked, so a search made at start
+            // would find nothing and never search again.
+            if ((rayInteractors == null || rayInteractors.Length == 0 || Array.Exists(rayInteractors, i => i == null))
+                && Time.unscaledTime >= nextInteractorSearch)
+            {
+                rayInteractors = Array.FindAll(
+                    FindObjectsByType<UnityEngine.XR.Interaction.Toolkit.Interactors.XRBaseInteractor>(FindObjectsInactive.Include, FindObjectsSortMode.None),
+                    i => i is UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals.ICurveInteractionDataProvider
+                         && i.handedness != UnityEngine.XR.Interaction.Toolkit.Interactors.InteractorHandedness.None); // not the gaze
+                nextInteractorSearch = Time.unscaledTime + 2f;
+            }
+            if (rayInteractors == null || rayInteractors.Length == 0) return true;
+
+            var bt = board.transform;
+            var plane = new Plane(bt.forward, bt.position);
+            float mx = 0.5f + 0.1f / Mathf.Max(bt.lossyScale.x, 1e-3f), my = 0.5f + 0.1f / Mathf.Max(bt.lossyScale.y, 1e-3f);
+            foreach (var i in rayInteractors)
+            {
+                if (i == null || !i.isActiveAndEnabled) continue;
+                var origin = ((UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals.ICurveInteractionDataProvider)i).curveOrigin;
+                if (origin == null) origin = i.transform;
+                var ray = new Ray(origin.position, origin.forward);
+                if (!plane.Raycast(ray, out float d)) continue;
+                var p = bt.InverseTransformPoint(ray.GetPoint(d)); // unit cube space
+                if (Mathf.Abs(p.x) <= mx && Mathf.Abs(p.y) <= my) return true;
+            }
+            return false;
         }
 
         /// <summary>Highlight a room as a drop target (connection drag); null clears.</summary>

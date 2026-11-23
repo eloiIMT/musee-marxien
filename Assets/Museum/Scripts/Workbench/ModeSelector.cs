@@ -7,11 +7,11 @@ using static VirtualMuseum.App.GlassUi;
 namespace VirtualMuseum.App
 {
     /// <summary>What the gizmo of the selected room lets the user do, in the selector's order (left to right).</summary>
-    public enum EditMode { Move, Height, Link }
+    public enum EditMode { Move, Resize, Link }
 
     /// <summary>
     /// "Glass" segmented control floating above the right controller while a room (or a connection) is selected:
-    /// Déplacer · Hauteur · Liaison (see the "Slider Hauteur Glass" design). Shown / hidden by <see cref="Maquette"/>.
+    /// Déplacer · Redimensionner · Liaison (see the "Slider Hauteur Glass" design). Shown / hidden by <see cref="Maquette"/>.
     ///  - right thumbstick left / right: previous / next mode, one step per flick (no auto-repeat); the list wraps
     ///    (right on Liaison goes back to Déplacer, left on Déplacer goes to Liaison)
     /// No collider on purpose: anything grabbable this close to the controller would become the Near-Far interactor's
@@ -22,9 +22,10 @@ namespace VirtualMuseum.App
     public class ModeSelector : MonoBehaviour
     {
         // Layout (design px, origin at the panel centre, +Y up).
-        const float PanelW = 360, PanelH = 116, PanelR = 32;
-        const float TrackW = 332, TrackH = 56, TrackY = 14;
-        const float SegW = 108, SegH = 48, FooterY = -33, FooterW = 316;
+        // Segments sized for the longest label ("Redimensionner" + icon).
+        const float PanelW = 516, PanelH = 116, PanelR = 32;
+        const float TrackW = 488, TrackH = 56, TrackY = 14;
+        const float SegW = 160, SegH = 48, FooterY = -33, FooterW = 472;
         const float IconSize = 18, IconGap = 6;
         // Thumbstick flick: fire above Press, re-arm below Release.
         const float Press = 0.6f, Release = 0.3f;
@@ -32,13 +33,13 @@ namespace VirtualMuseum.App
         // On the controller: world scale of the panel (1 = 21.6 cm wide) and height above the controller.
         const float ControllerScale = 0.6f, ControllerLift = 0.08f;
 
-        static readonly string[] Names = { "Déplacer", "Hauteur", "Liaison" };
-        static readonly IconKind[] Kinds = { IconKind.Move, IconKind.Height, IconKind.Link };
+        static readonly string[] Names = { "Déplacer", "Redimensionner", "Liaison" };
+        static readonly IconKind[] Kinds = { IconKind.Move, IconKind.Resize, IconKind.Link };
         static readonly string[] Hints =
         {
-            "Grip sur une salle pour la bouger",
-            "Slider sur le mur du bas",
-            "Grip sphère orange vers une salle",
+            "Gâchette sur une salle pour la bouger",
+            "Cubes jaunes : largeur / longueur · slider : hauteur",
+            "Gâchette sphère orange vers une salle",
         };
 
         /// <summary>Fallback place when no right controller is tracked (desktop / simulator).</summary>

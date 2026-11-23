@@ -99,7 +99,7 @@ namespace VirtualMuseum.App
 
         // ---------------------------------------------------------------- icons
 
-        public enum IconKind { Height, Move, Link, Joystick }
+        public enum IconKind { Height, Move, Link, Joystick, Resize }
 
         static readonly Dictionary<IconKind, Material> iconMaterials = new();
 
@@ -165,6 +165,13 @@ namespace VirtualMuseum.App
                 new Stroke(9, 2, 9, 16), new Stroke(2, 9, 16, 9),
                 new Stroke(7, 4, 9, 2), new Stroke(9, 2, 11, 4), new Stroke(7, 14, 9, 16), new Stroke(9, 16, 11, 14),
                 new Stroke(4, 7, 2, 9), new Stroke(2, 9, 4, 11), new Stroke(14, 7, 16, 9), new Stroke(16, 9, 14, 11),
+            }, 18f, 1.8f),
+            // Resize: corner-to-corner double arrow (expand), arrowheads as right-angle corners.
+            IconKind.Resize => (new[]
+            {
+                new Stroke(4.5f, 13.5f, 13.5f, 4.5f),
+                new Stroke(9, 3.5f, 14.5f, 3.5f), new Stroke(14.5f, 3.5f, 14.5f, 9),
+                new Stroke(3.5f, 9, 3.5f, 14.5f), new Stroke(3.5f, 14.5f, 9, 14.5f),
             }, 18f, 1.8f),
             IconKind.Link => (new[]
             {

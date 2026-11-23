@@ -8,7 +8,8 @@ namespace VirtualMuseum.AppEditor
 {
     /// <summary>
     /// Builds the organizer test setup in the open scene: backend, immersive museum, vertical plan board with the
-    /// interactive miniature (Maquette + tour path + "new room" button), tutorial board below it, XR rig facing it.
+    /// interactive miniature (Maquette; rooms are created by clicking the empty plan), tutorial board below it,
+    /// XR rig facing it.
     /// </summary>
     public static class MaquetteSandboxSetup
     {
@@ -40,7 +41,7 @@ namespace VirtualMuseum.AppEditor
 
             // Immersive museum, scale 1, at the origin (museum coordinates = world coordinates).
             var immersive = new GameObject("Museum Immersive").AddComponent<MuseumView>();
-            Configure(immersive, backend, floor, wall, cable, expanded: true, wallColliders: true, labelHeight: 0f, warnings: false);
+            Configure(immersive, backend, floor, wall, cable, expanded: true, wallColliders: true, labelHeight: 0f, warnings: false, cables: false);
 
             // Workshop "plan": a vertical board, like a wall map, facing the user (front face towards -Z).
             var bench = new GameObject("Workbench").transform;
@@ -74,29 +75,8 @@ namespace VirtualMuseum.AppEditor
             so.FindProperty("board").objectReferenceValue = board.GetComponent<Collider>();
             so.FindProperty("handleMaterial").objectReferenceValue = handle;
             so.ApplyModifiedPropertiesWithoutUndo();
-
-            // "New room" button to the right of the board, at hand height.
-            var buttonPos = new Vector3(BoardSize.x / 2f + 0.15f, BoardCenterY - 0.25f, -0.05f);
-            var button = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            button.name = "New Room Button";
-            button.transform.SetParent(bench, false);
-            button.transform.localScale = new Vector3(0.08f, 0.08f, 0.04f);
-            button.transform.localPosition = buttonPos;
-            button.GetComponent<Renderer>().sharedMaterial = GetOrCreateMaterial("Button", new Color(0.2f, 0.75f, 0.35f), false);
-            button.AddComponent<Clickable>();
-            var creator = button.AddComponent<RoomCreator>();
-            so = new SerializedObject(creator);
-            so.FindProperty("maquette").objectReferenceValue = maquette;
-            so.ApplyModifiedPropertiesWithoutUndo();
-            var caption = new GameObject("Caption").AddComponent<TextMesh>();
-            caption.transform.SetParent(bench, false);
-            caption.transform.localPosition = buttonPos + new Vector3(0f, 0.08f, -0.02f);
-            caption.text = "Nouvelle salle";
-            caption.anchor = TextAnchor.MiddleCenter;
-            caption.fontSize = 64;
-            caption.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            caption.GetComponent<MeshRenderer>().sharedMaterial = caption.font.material;
-            caption.characterSize = 0.003f;
+            // No "new room" button: rooms are created by clicking the skeleton shown on the empty plan (RoomCreator,
+            // added by the Maquette at runtime).
 
             Undo.RegisterCreatedObjectUndo(immersive.gameObject, "Create Maquette Sandbox");
             Undo.RegisterCreatedObjectUndo(bench.gameObject, "Create Maquette Sandbox");
@@ -110,7 +90,7 @@ namespace VirtualMuseum.AppEditor
         }
 
         static void Configure(MuseumView view, MuseumBackend backend, Material floor, Material wall, Material cable,
-                              bool expanded, bool wallColliders, float labelHeight, bool warnings)
+                              bool expanded, bool wallColliders, float labelHeight, bool warnings, bool cables = true)
         {
             var so = new SerializedObject(view);
             so.FindProperty("backend").objectReferenceValue = backend;
@@ -121,6 +101,7 @@ namespace VirtualMuseum.AppEditor
             so.FindProperty("wallColliders").boolValue = wallColliders;
             so.FindProperty("labelHeight").floatValue = labelHeight;
             so.FindProperty("showArtworkWarnings").boolValue = warnings;
+            so.FindProperty("showCables").boolValue = cables;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -242,9 +223,7 @@ namespace VirtualMuseum.AppEditor
             var tutoSpot = Spot("Spot_Tuto");
             Place(bench.transform.Find("Tutorial Board"), tutoSpot);
             Place(bench.transform.Find("Tutorial Text"), tutoSpot, new Vector3(0f, 0f, -0.006f));
-            var newRoomSpot = Spot("Spot_BoutonNouvelleSalle");
-            Place(bench.transform.Find("New Room Button"), newRoomSpot);
-            Place(bench.transform.Find("Caption"), newRoomSpot, new Vector3(0f, 0.08f, -0.02f));
+            // Spot_BoutonNouvelleSalle is left empty: rooms are created by clicking the empty plan.
             Place(bench.transform.Find("Visitor Teleport Button"), Spot("Spot_VueVisiteur"));
 
             var stand = bench.transform.Find("Board Stand");
@@ -265,6 +244,50 @@ namespace VirtualMuseum.AppEditor
                 rig.transform.SetPositionAndRotation(userSpot.position, userSpot.rotation);
             }
             EditorSceneManager.MarkSceneDirty(room.gameObject.scene);
+        }
+
+        const string TourScreenModelPath = "Assets/3D/EcranParcours.fbx";
+        // On the workbench right behind the user (Spot_Joueur is at x = 0; top at y = 0.9), so it takes the place
+        // reserved for the gacha (Spot_Gacha). Foot flush with the workbench front edge (z = -1.95) and facing straight
+        // +Z: the shelf above the workbench comes down to y = 1.45 from z = -2.2, and the screen top (y = 1.64) must
+        // stay in front of it.
+        static readonly Vector3 TourScreenPosition = new Vector3(0f, 0.9f, -2.08f);
+        const float TourScreenModelScale = 2.5f;
+
+        /// <summary>
+        /// Tour editor screen (<see cref="TourScreen"/>) on the workbench behind the user: Kenney's "Computer Screen"
+        /// (Assets/3D/EcranParcours.fbx, built by Assets/3D/Source~/build_screen.py), child of the Workbench so it is
+        /// hidden in visitor mode. Re-running re-places it.
+        /// </summary>
+        [MenuItem("Tools/Virtual Museum/Add Tour Screen")]
+        public static void AddTourScreen()
+        {
+            var bench = GameObject.Find("Workbench");
+            if (bench == null) { Debug.LogWarning("No 'Workbench' in the scene: create the maquette sandbox first."); return; }
+            var screen = bench.transform.Find("Tour Screen");
+            if (screen == null)
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(TourScreenModelPath);
+                if (prefab == null) { Debug.LogWarning("Tour screen model not found at " + TourScreenModelPath); return; }
+                screen = new GameObject("Tour Screen").transform;
+                screen.SetParent(bench.transform, false);
+                var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab, screen);
+                model.name = "Model";
+                model.transform.localScale = Vector3.one * TourScreenModelScale;
+                foreach (var r in model.GetComponentsInChildren<MeshRenderer>())
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                var tour = screen.gameObject.AddComponent<TourScreen>();
+                var so = new SerializedObject(tour);
+                so.FindProperty("backend").objectReferenceValue = Object.FindAnyObjectByType<MuseumBackend>();
+                so.FindProperty("modelScale").floatValue = TourScreenModelScale;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                Undo.RegisterCreatedObjectUndo(screen.gameObject, "Add Tour Screen");
+            }
+            // Front (-Z) towards the room (+Z), i.e. towards the user once turned around.
+            Undo.RecordObject(screen, "Add Tour Screen");
+            screen.SetLocalPositionAndRotation(TourScreenPosition, Quaternion.Euler(0f, 180f, 0f));
+            EditorSceneManager.MarkSceneDirty(screen.gameObject.scene);
+            Selection.activeGameObject = screen.gameObject;
         }
 
         const string CeilingLightMaterialPath = MaterialsFolder + "/AtelierLumiere.mat";
@@ -322,24 +345,24 @@ namespace VirtualMuseum.AppEditor
         const string TutorialText =
             "MAQUETTE — COMMANDES\n" +
             "\n" +
-            "Rayon : pointer · Gâchette : cliquer · Grip : saisir\n" +
-            "Salle sélectionnée : joystick droit ← → = mode Déplacer / Hauteur / Liaison\n" +
+            "Rayon : pointer · Gâchette (seul bouton) : cliquer et saisir\n" +
+            "Salle sélectionnée, rayon sur le plan : joystick droit ← → = Déplacer / Redimensionner / Liaison\n" +
             "\n" +
             "Salles\n" +
             "  Gâchette sur une salle : sélectionner (passe en 3D)\n" +
-            "  Gâchette sur le plan vide : désélectionner\n" +
-            "  Bouton vert « Nouvelle salle » puis gâchette sur le plan : créer\n" +
-            "  Déplacer · grip sur le sol (ou sphère bleue) : bouger · poignet : 15°\n" +
-            "  Déplacer · grip cubes jaunes (coins) : largeur / longueur\n" +
-            "  Hauteur · slider sur le mur du bas : grip et glisser, ou gâchette\n" +
+            "  Gâchette sur le plan vide : désélectionner la salle\n" +
+            "  Rien de sélectionné, rayon sur le plan vide : squelette 6 × 6 m, gâchette : créer\n" +
+            "  Déplacer · gâchette sur le sol (ou sphère bleue) : bouger · poignet : 15°\n" +
+            "  Redimensionner · gâchette cubes jaunes (coins) : largeur / longueur\n" +
+            "  Redimensionner · slider sur le mur du bas : hauteur (glisser, ou gâchette sur la piste)\n" +
             "  Cube rouge, 2 clics : supprimer la salle\n" +
             "\n" +
             "Connexions\n" +
-            "  Liaison · grip sphère orange, relâcher sur une salle : relier\n" +
+            "  Liaison · gâchette sphère orange, relâcher sur une salle : relier\n" +
             "  Liaison · gâchette sur un câble puis cube rouge : déconnecter\n" +
             "\n" +
             "Œuvres (salle sélectionnée, mode Déplacer)\n" +
-            "  Grip sur l'œuvre : déplacer · près d'un mur : aimantée\n" +
+            "  Gâchette sur l'œuvre : déplacer · près d'un mur : aimantée\n" +
             "  Relâcher dans une autre salle : transférer\n" +
             "\n" +
             "Vert = possible · Rouge = refusé (retour en place)";
@@ -348,7 +371,18 @@ namespace VirtualMuseum.AppEditor
         [MenuItem("Tools/Virtual Museum/Add Tutorial Board")]
         public static void AddTutorialBoard()
         {
-            if (GameObject.Find("Tutorial Board") != null) return;
+            if (GameObject.Find("Tutorial Board") != null)
+            {
+                // Already there: refresh its text (the commands changed).
+                var existing = GameObject.Find("Tutorial Text")?.GetComponent<TextMesh>();
+                if (existing != null && existing.text != TutorialText)
+                {
+                    Undo.RecordObject(existing, "Add Tutorial Board");
+                    existing.text = TutorialText;
+                    EditorSceneManager.MarkSceneDirty(existing.gameObject.scene);
+                }
+                return;
+            }
             var bench = GameObject.Find("Workbench");
             var board = GameObject.CreatePrimitive(PrimitiveType.Cube);
             board.name = "Tutorial Board";

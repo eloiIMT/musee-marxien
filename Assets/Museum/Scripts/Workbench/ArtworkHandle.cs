@@ -3,7 +3,7 @@ using UnityEngine;
 namespace VirtualMuseum.App
 {
     /// <summary>
-    /// Grab an artwork on the miniature (spec 2.6), same mechanism as rooms: grip with the ray, the artwork follows
+    /// Grab an artwork on the miniature (spec 2.6), same mechanism as rooms: trigger with the ray, the artwork follows
     /// the point aimed at on the plan (grab offset kept), a ghost shows where it lands.
     ///  - only in the SELECTED room (the one shown in 3D)
     ///  - turning the wrist like a knob rotates it by 15°; within 0.5 m of a wall it snaps to the wall, facing into the room

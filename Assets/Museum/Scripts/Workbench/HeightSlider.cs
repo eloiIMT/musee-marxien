@@ -8,9 +8,9 @@ namespace VirtualMuseum.App
 {
     /// <summary>
     /// Horizontal "glass" slider for the wall height of the selected room (2 to 8 m, 0.5 m steps), drawn flat on top of
-    /// the room's bottom wall (the one lowest on the board), facing the user. Shown in the Height mode.
-    ///  - GRIP on the slider and slide along it: preview with the ghost outline, applied on release
-    ///  - TRIGGER on the track: jump straight to that height
+    /// the room's bottom wall (the one lowest on the board), facing the user. Shown in the Resize mode (with the yellow corners).
+    ///  - TRIGGER on the slider and slide along it: preview with the ghost outline, applied on release
+    ///  - TRIGGER on the track without sliding: jump straight to that height
     /// Sizes are design px (360 × 124, see <see cref="GlassUi"/>); the root keeps a world scale of 1.
     /// </summary>
     public class HeightSlider : DragHandle

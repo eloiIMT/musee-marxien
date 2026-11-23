@@ -6,9 +6,10 @@ namespace VirtualMuseum.App
     /// <summary>
     /// Handles shown on the selected room, filtered by the edit mode (<see cref="Maquette.Mode"/>).
     /// Parented to the RoomView so it follows its position and rotation.
-    ///  - Move:   centre sphere (blue): move / rotate (grip) · 4 floor corners (yellow): width / length (grip)
-    ///  - Height: glass slider on top of the bottom wall (grip and slide, or trigger on the track)
-    ///  - Link:   4 wall spheres (orange): pull a connection (grip, release over another room)
+    ///  - Move:   centre sphere (blue): move / rotate (trigger)
+    ///  - Resize: 4 floor corners (yellow): width / length (trigger) · glass slider on top of the bottom wall: height
+    ///            (trigger and slide, or trigger on the track)
+    ///  - Link:   4 wall spheres (orange): pull a connection (trigger, release over another room)
     ///  - always: top-right trash icon (red): delete, click twice (trigger)
     /// Handle size is constant in world space so they stay grabbable whatever the miniature scale.
     /// </summary>
@@ -82,8 +83,8 @@ namespace VirtualMuseum.App
             // Only the handles of the current edit mode (the trash stays available in every mode).
             var mode = maquette.Mode;
             SetVisible(move.gameObject, mode == EditMode.Move);
-            foreach (var c in corners) SetVisible(c.gameObject, mode == EditMode.Move);
-            SetVisible(heightSlider.gameObject, mode == EditMode.Height);
+            foreach (var c in corners) SetVisible(c.gameObject, mode == EditMode.Resize);
+            SetVisible(heightSlider.gameObject, mode == EditMode.Resize);
             foreach (var c in connectors) SetVisible(c.gameObject, mode == EditMode.Link);
 
             move.localPosition = new Vector3(0, 0.6f, 0);

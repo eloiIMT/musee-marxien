@@ -6,27 +6,22 @@ namespace VirtualMuseum.App
     /// One artwork of the life-size museum, with its museum label ("cartel"): a lectern standing on the floor beside
     /// the artwork, on the viewer's right, showing the title and description of THIS instance. The text is part of
     /// the world (diegetic), like in a real museum: nothing floats in front of the user, nothing follows the head.
-    /// Pointing at the artwork with the ray outlines it and lights up its label, so the link between the two is clear.
+    /// The artwork itself is inert for the visitor: no collider, nothing happens when the ray passes over it.
     /// </summary>
     public class ArtworkTarget : MonoBehaviour
     {
-        const float Inflate = 0.06f;
         const float PostHeight = 0.95f, PlateW = 0.5f, PlateH = 0.38f, Tilt = 35f;
         const float TitleH = 0.034f, BodyH = 0.017f, Margin = 0.025f;
         const float WallClearance = 0.3f;
         static readonly Color PlateColor = new Color(0.12f, 0.13f, 0.15f);
-        static readonly Color PlateLit = new Color(0.2f, 0.24f, 0.3f);
 
         public string ArtworkId { get; private set; }
         /// <summary>Artwork bounds in its own local space.</summary>
         public Bounds LocalBounds { get; private set; }
-        public bool IsHovered => click != null && click.IsHovered;
         /// <summary>The floor-standing label (for tests / other tools).</summary>
         public Transform Label => label;
 
         VisitorGuide guide;
-        Clickable click;
-        LineRenderer outline;
         Transform label, plate, strip;
         TextMesh title, body;
 
@@ -35,41 +30,8 @@ namespace VirtualMuseum.App
             guide = owner;
             ArtworkId = artworkId;
             LocalBounds = ComputeLocalBounds();
-
-            // One box collider around the whole artwork: easy to point at, even for thin or small parts.
-            var box = gameObject.AddComponent<BoxCollider>();
-            box.center = LocalBounds.center;
-            box.size = LocalBounds.size + Vector3.one * 0.04f;
-            click = gameObject.AddComponent<Clickable>();
-            click.HoverChanged += _ => RefreshHighlight();
-
-            BuildOutline();
             BuildLabel();
             Refresh();
-        }
-
-        void BuildOutline()
-        {
-            outline = new GameObject("Outline").AddComponent<LineRenderer>();
-            outline.transform.SetParent(transform, false);
-            outline.useWorldSpace = false;
-            outline.sharedMaterial = UiKit.Material;
-            outline.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            outline.numCapVertices = 2;
-            outline.widthMultiplier = 0.01f;
-            var b = LocalBounds;
-            var min = b.min - Vector3.one * Inflate;
-            var max = b.max + Vector3.one * Inflate;
-            Vector3 P(int x, int y, int z) => new Vector3(x == 0 ? min.x : max.x, y == 0 ? min.y : max.y, z == 0 ? min.z : max.z);
-            // A single strip covering the 12 edges (3 retraced).
-            var points = new[]
-            {
-                P(0,0,0), P(1,0,0), P(1,0,1), P(0,0,1), P(0,0,0), P(0,1,0), P(1,1,0), P(1,0,0),
-                P(1,1,0), P(1,1,1), P(1,0,1), P(1,1,1), P(0,1,1), P(0,0,1), P(0,1,1), P(0,1,0),
-            };
-            outline.positionCount = points.Length;
-            outline.SetPositions(points);
-            outline.enabled = false;
         }
 
         /// <summary>Lectern: a post on the floor and a tilted plate at reading height (~1 m), facing the viewer.</summary>
@@ -127,7 +89,7 @@ namespace VirtualMuseum.App
                     PlateH / 2f - 0.03f - UiKit.LineCount(t) * TitleH * 1.05f - 0.012f, -0.002f);
             }
             PlaceLabel(a != null ? guide.GetRoom(a.roomId) : null);
-            RefreshHighlight();
+            RefreshColours();
         }
 
         /// <summary>
@@ -153,15 +115,11 @@ namespace VirtualMuseum.App
             label.SetPositionAndRotation(roomSpace.TransformPoint(local), roomSpace.rotation * Quaternion.Euler(0, yaw + 180f, 0));
         }
 
-        void RefreshHighlight()
+        void RefreshColours()
         {
-            if (outline == null) return;
-            bool hovered = IsHovered;
-            outline.enabled = hovered;
-            Tint.Set(outline, Color.white);
             // RoomView clears every child renderer's tint on refresh (artwork warnings): re-apply ours.
-            Tint.Set(plate.GetComponent<Renderer>(), hovered ? PlateLit : PlateColor);
-            Tint.Set(strip.GetComponent<Renderer>(), hovered ? UiKit.Info : UiKit.MutedText);
+            Tint.Set(plate.GetComponent<Renderer>(), PlateColor);
+            Tint.Set(strip.GetComponent<Renderer>(), UiKit.MutedText);
             foreach (var r in label.GetComponentsInChildren<Renderer>())
                 if (r.name == "Post" || r.name == "Foot") Tint.Set(r, new Color(0.3f, 0.31f, 0.33f));
         }

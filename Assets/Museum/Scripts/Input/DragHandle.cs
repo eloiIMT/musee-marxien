@@ -6,7 +6,7 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 namespace VirtualMuseum.App
 {
     /// <summary>
-    /// Base for gizmo handles grabbed with the GRIP (near or far, via the Near-Far interactor).
+    /// Base for gizmo handles grabbed with the index TRIGGER (near or far, via the Near-Far interactor).
     /// The handle itself never moves: subclasses read the hand pose each frame, show a preview,
     /// and call the API once, on release.
     /// </summary>
@@ -47,7 +47,7 @@ namespace VirtualMuseum.App
             if (interactable == null) interactable = gameObject.AddComponent<XRSimpleInteractable>();
             interactable.selectEntered.AddListener(a =>
             {
-                // A disabled handle (e.g. not available in the current edit mode) ignores the grip.
+                // A disabled handle (e.g. not available in the current edit mode) ignores the press.
                 if (!isActiveAndEnabled) return;
                 Hand = a.interactorObject.transform;
                 // Cast from the same origin as the drawn XRI ray, so the object stays under its visible end.

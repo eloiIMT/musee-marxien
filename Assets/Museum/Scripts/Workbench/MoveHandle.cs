@@ -3,7 +3,7 @@ using UnityEngine;
 namespace VirtualMuseum.App
 {
     /// <summary>
-    /// Centre handle: grab it with the ray (grip) and the room follows the point the ray aims at on the plan,
+    /// Centre handle: grab it with the ray (trigger) and the room follows the point the ray aims at on the plan,
     /// keeping the grab offset, so the cursor stays on the room. A ghost shows the landing spot, snapped to a
     /// 0.5 m grid; turning the wrist like a knob rotates it in 15° steps. The API is called once, on release,
     /// and refused if the room would come closer than 1 m to another one or leave the plan board.
@@ -18,7 +18,7 @@ namespace VirtualMuseum.App
         string reason;
 
         /// <summary>
-        /// Set when the handle is a room's floor: grip anywhere on the floor moves that room, selected or not
+        /// Set when the handle is a room's floor: trigger anywhere on the floor moves that room, selected or not
         /// (it gets selected on grab). Null for the gizmo's centre handle, which moves the selected room.
         /// </summary>
         public string FixedRoomId { get; set; }
