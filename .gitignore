@@ -46,3 +46,7 @@ Desktop.ini
 
 # Keep Assets and their .meta files, Packages (including packages-lock.json),
 # and ProjectSettings under version control. Do not ignore them.
+
+# Visual Studio upgrade reports
+UpgradeLog*.htm
+_UpgradeReport_Files/
