@@ -213,6 +213,9 @@ namespace VirtualMuseum.AppEditor
             var targetCenter = floorCenter + Vector3.up * bounds.extents.y;
             machine.transform.position += targetCenter - bounds.center;
             bounds = GetCombinedBounds(renderers);
+            var originalCenter = bounds.center;
+            model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            model.transform.position += originalCenter - GetCombinedBounds(renderers).center;
 
             var buttonMaterial = GetOrCreateMaterial("GachaButton", new Color(1f, 0.55f, 0.08f), true);
             var capsuleMaterial = GetOrCreateMaterial("GachaCapsule", new Color(1f, 0.18f, 0.62f), true);
