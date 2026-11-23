@@ -12,6 +12,7 @@ namespace VirtualMuseum.App
     public class TriggerRouter : MonoBehaviour
     {
         public static TriggerRouter Instance { get; private set; }
+        public event Action<InteractorHandedness> TriggerReleased;
 
         /// <summary>When set, receives every trigger press first. Return true to consume it.</summary>
         public Func<InteractorHandedness, bool> Capture;
@@ -29,6 +30,8 @@ namespace VirtualMuseum.App
             right.AddBinding("<XRController>{RightHand}/{TriggerButton}");
             left.performed += _ => Press(InteractorHandedness.Left);
             right.performed += _ => Press(InteractorHandedness.Right);
+            left.canceled += _ => Release(InteractorHandedness.Left);
+            right.canceled += _ => Release(InteractorHandedness.Right);
         }
 
         void OnEnable() { left.Enable(); right.Enable(); }
@@ -40,7 +43,15 @@ namespace VirtualMuseum.App
         {
             if (Capture != null && Capture(hand)) return;
             var target = Clickable.HoveredBy(hand, out var interactor);
-            if (target != null) target.Click(interactor);
+            if (target != null)
+            {
+                target.Click(interactor);
+                return;
+            }
+
+            GachaCapsuleTriggerGrab.TryGrabHoveredBy(hand);
         }
+
+        void Release(InteractorHandedness hand) => TriggerReleased?.Invoke(hand);
     }
 }

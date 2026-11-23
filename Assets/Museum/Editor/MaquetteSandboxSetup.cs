@@ -2,6 +2,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using VirtualMuseum.App;
 
 namespace VirtualMuseum.AppEditor
@@ -14,6 +15,9 @@ namespace VirtualMuseum.AppEditor
     {
         const string MaterialsFolder = "Assets/Museum/Materials";
         const string RigPath = "Assets/XR/Essentials/Prefabs/XR Origin (XR Rig).prefab";
+        const string SandboxScenePath = "Assets/Museum/Scenes/Sandbox_Maquette.unity";
+        const string MainScenePath = "Assets/Scenes/VirtualMuseum.unity";
+        const string GachaModelPath = "Assets/Models/gashapon_machine/source/Gashapon_Machine_Low.fbx";
         const float BoardCenterY = 1.35f;                              // centre at chest / eye height
         static readonly Vector3 BoardSize = new Vector3(1.4f, 1.0f, 0.04f); // width, height, thickness
         static readonly Vector3 BenchPosition = new Vector3(5f, 0f, -10f);
@@ -21,14 +25,14 @@ namespace VirtualMuseum.AppEditor
         [MenuItem("Tools/Virtual Museum/Create Maquette Sandbox")]
         public static void Create()
         {
-            if (Object.FindAnyObjectByType<MuseumView>() != null)
+            if (UnityEngine.Object.FindAnyObjectByType<MuseumView>() != null)
             {
                 Debug.LogWarning("This scene already contains a MuseumView. Nothing created.");
                 return;
             }
-            if (Object.FindAnyObjectByType<MuseumBackend>() == null)
+            if (UnityEngine.Object.FindAnyObjectByType<MuseumBackend>() == null)
                 VirtualMuseum.Editor.MuseumSetup.AddBackendToScene();
-            var backend = Object.FindAnyObjectByType<MuseumBackend>();
+            var backend = UnityEngine.Object.FindAnyObjectByType<MuseumBackend>();
 
             var floor = GetOrCreateMaterial("Floor", new Color(0.75f, 0.75f, 0.72f), false);
             var wall = GetOrCreateMaterial("Wall", new Color(0.95f, 0.95f, 0.93f), false);
@@ -99,11 +103,201 @@ namespace VirtualMuseum.AppEditor
             Undo.RegisterCreatedObjectUndo(bench.gameObject, "Create Maquette Sandbox");
             AddWorkshopFloor();
             AddTutorialBoard();
+            CreateGachaMachine(bench, new Vector3(bench.position.x - 1.2f, bench.position.y, bench.position.z - 0.1f));
             AddRig();
 
             EditorSceneManager.MarkSceneDirty(immersive.gameObject.scene);
             Selection.activeGameObject = bench.gameObject;
             Debug.Log("Maquette sandbox created. Play (Quest Link or XR Device Simulator): the museum appears at scale 1 and on the plan board.");
+        }
+
+        [MenuItem("Tools/Virtual Museum/Add Gacha Machine to Sandbox")]
+        public static void AddGachaMachineToSandbox()
+        {
+            var scene = SceneManager.GetSceneByPath(SandboxScenePath);
+            bool openedHere = !scene.IsValid() || !scene.isLoaded;
+            if (openedHere) scene = EditorSceneManager.OpenScene(SandboxScenePath, OpenSceneMode.Additive);
+
+            var previousActiveScene = SceneManager.GetActiveScene();
+            try
+            {
+                SceneManager.SetActiveScene(scene);
+                Transform bench = null;
+                foreach (var root in scene.GetRootGameObjects())
+                {
+                    if (root.name == "Workbench") bench = root.transform;
+                }
+
+                if (bench == null) throw new System.InvalidOperationException("Sandbox scene has no Workbench.");
+                CreateGachaMachine(bench, new Vector3(bench.position.x - 1.2f, bench.position.y, bench.position.z - 0.1f));
+                EditorSceneManager.MarkSceneDirty(scene);
+                if (!EditorSceneManager.SaveScene(scene))
+                    throw new System.InvalidOperationException("Could not save the Gacha Machine to the sandbox scene.");
+            }
+            finally
+            {
+                if (previousActiveScene.IsValid() && previousActiveScene.isLoaded)
+                    SceneManager.SetActiveScene(previousActiveScene);
+                if (openedHere) EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        [MenuItem("Tools/Virtual Museum/Add Gacha Machine to VirtualMuseum Scene")]
+        public static void AddGachaMachineToVirtualMuseumScene()
+        {
+            var scene = SceneManager.GetSceneByPath(MainScenePath);
+            if (!scene.IsValid() || !scene.isLoaded)
+                scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Additive);
+
+            if (!scene.IsValid() || !scene.isLoaded)
+                throw new System.InvalidOperationException("Could not open " + MainScenePath);
+
+            GameObject plan = null;
+            foreach (var root in scene.GetRootGameObjects())
+                if (root.name == "Plan") { plan = root; break; }
+
+            if (plan == null)
+                throw new System.InvalidOperationException("The VirtualMuseum scene has no Plan object.");
+            var planRenderer = plan.GetComponent<Renderer>();
+            if (planRenderer == null)
+                throw new System.InvalidOperationException("The Plan object has no Renderer.");
+
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                if (root.name != "Gacha Machine") continue;
+                Selection.activeGameObject = root;
+                SceneView.lastActiveSceneView?.FrameSelected();
+                Debug.Log("Gacha Machine is already present in the VirtualMuseum scene.", root);
+                return;
+            }
+
+            var planBounds = planRenderer.bounds;
+            var floorCenter = new Vector3(planBounds.max.x + 0.75f, 0f, planBounds.center.z - 0.2f);
+            var machine = CreateGachaMachine(null, floorCenter);
+            SceneManager.MoveGameObjectToScene(machine, scene);
+            EditorSceneManager.MarkSceneDirty(scene);
+            if (!EditorSceneManager.SaveScene(scene))
+                throw new System.InvalidOperationException("Could not save the Gacha Machine to the VirtualMuseum scene.");
+
+            Selection.activeGameObject = machine;
+            SceneView.lastActiveSceneView?.FrameSelected();
+            Debug.Log("Gacha Machine added beside Plan in the VirtualMuseum scene.", machine);
+        }
+
+        static GameObject CreateGachaMachine(Transform parent, Vector3 floorCenter)
+        {
+            var existing = parent != null ? parent.Find("Gacha Machine") : null;
+            if (existing != null) return existing.gameObject;
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(GachaModelPath);
+            if (prefab == null)
+                throw new System.InvalidOperationException("Gacha FBX not found at " + GachaModelPath);
+
+            var machine = new GameObject("Gacha Machine");
+            if (parent != null) machine.transform.SetParent(parent, false);
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            model.name = "Gacha Machine Model";
+            model.transform.SetParent(machine.transform, false);
+
+            var renderers = model.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+                throw new System.InvalidOperationException("The Gacha FBX contains no renderers.");
+
+            var bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            if (bounds.size.y <= 0f)
+                throw new System.InvalidOperationException("The Gacha FBX has no measurable height.");
+
+            machine.transform.localScale = Vector3.one * (1.25f / bounds.size.y);
+            bounds = GetCombinedBounds(renderers);
+            var targetCenter = floorCenter + Vector3.up * bounds.extents.y;
+            machine.transform.position += targetCenter - bounds.center;
+            bounds = GetCombinedBounds(renderers);
+
+            var buttonMaterial = GetOrCreateMaterial("GachaButton", new Color(1f, 0.55f, 0.08f), true);
+            var capsuleMaterial = GetOrCreateMaterial("GachaCapsule", new Color(1f, 0.18f, 0.62f), true);
+            var displayMaterial = GetOrCreateMaterial("GachaDisplay", new Color(0.08f, 0.09f, 0.11f), false);
+
+            var front = bounds.min.z - 0.06f;
+            var buttonPosition = new Vector3(bounds.center.x, bounds.min.y + bounds.size.y * 0.62f, front);
+            var signPosition = buttonPosition + Vector3.up * 0.17f;
+            var sign = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            sign.name = "Gacha Instructions";
+            UnityEngine.Object.DestroyImmediate(sign.GetComponent<Collider>());
+            sign.transform.SetParent(machine.transform, true);
+            sign.transform.position = signPosition;
+            sign.transform.localScale = Vector3.one * (1f / machine.transform.lossyScale.x);
+            sign.transform.localScale = Vector3.Scale(sign.transform.localScale, new Vector3(0.42f, 0.18f, 0.025f));
+            sign.GetComponent<Renderer>().sharedMaterial = displayMaterial;
+
+            var instructions = CreateText(machine.transform, "Gacha Instructions Text",
+                "APPUYEZ SUR LA GACHETTE\nVISEZ LE BOUTON\nGACHA",
+                signPosition + new Vector3(0f, 0f, -0.014f), 0.0028f, 42, Color.white);
+            instructions.alignment = TextAlignment.Center;
+            instructions.anchor = TextAnchor.MiddleCenter;
+
+            var button = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            button.name = "Press To Dispense Button";
+            button.transform.SetParent(machine.transform, true);
+            button.transform.position = buttonPosition;
+            button.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            button.transform.localScale = Vector3.one * (1f / machine.transform.lossyScale.x);
+            button.transform.localScale = Vector3.Scale(button.transform.localScale, new Vector3(0.14f, 0.025f, 0.14f));
+            button.GetComponent<Renderer>().sharedMaterial = buttonMaterial;
+            button.AddComponent<Clickable>();
+            var dispenser = button.AddComponent<GachaDispenser>();
+
+            var tray = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            tray.name = "Capsule Output Tray";
+            tray.transform.SetParent(machine.transform, true);
+            tray.transform.position = new Vector3(bounds.center.x, bounds.min.y + 0.08f, bounds.min.z - 0.08f);
+            tray.transform.localScale = Vector3.one * (1f / machine.transform.lossyScale.x);
+            tray.transform.localScale = Vector3.Scale(tray.transform.localScale, new Vector3(0.28f, 0.08f, 0.18f));
+            tray.GetComponent<Renderer>().sharedMaterial = displayMaterial;
+
+            var spawnPoint = new GameObject("Capsule Spawn Point").transform;
+            spawnPoint.SetParent(machine.transform, true);
+            spawnPoint.position = new Vector3(bounds.center.x, bounds.min.y + 0.18f, bounds.min.z - 0.12f);
+            var capsuleLabel = CreateText(machine.transform, "Capsule Output Label", "CAPSULE",
+                new Vector3(bounds.center.x, bounds.min.y + 0.05f, bounds.min.z - 0.19f), 0.0025f, 40, Color.white);
+            capsuleLabel.alignment = TextAlignment.Center;
+            capsuleLabel.anchor = TextAnchor.MiddleCenter;
+
+            var serialized = new SerializedObject(dispenser);
+            serialized.FindProperty("capsuleSpawnPoint").objectReferenceValue = spawnPoint;
+            serialized.FindProperty("capsuleMaterial").objectReferenceValue = capsuleMaterial;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            Undo.RegisterCreatedObjectUndo(machine, "Add Gacha Machine");
+            return machine;
+        }
+
+        static Bounds GetCombinedBounds(Renderer[] renderers)
+        {
+            var bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            return bounds;
+        }
+
+        static TextMesh CreateText(Transform parent, string objectName, string value, Vector3 position,
+                                   float characterSize, int fontSize, Color color)
+        {
+            var textObject = new GameObject(objectName);
+            textObject.transform.SetParent(parent, true);
+            textObject.transform.position = position;
+            textObject.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+            var inverseScale = 1f / parent.lossyScale.x;
+            textObject.transform.localScale = new Vector3(-inverseScale, inverseScale, inverseScale);
+            var text = textObject.AddComponent<TextMesh>();
+            text.text = value;
+            text.anchor = TextAnchor.MiddleCenter;
+            text.alignment = TextAlignment.Center;
+            text.fontSize = fontSize;
+            text.characterSize = characterSize;
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.color = color;
+            text.GetComponent<MeshRenderer>().sharedMaterial = text.font.material;
+            return text;
         }
 
         static void Configure(MuseumView view, MuseumBackend backend, Material floor, Material wall, Material cable,
@@ -168,7 +362,7 @@ namespace VirtualMuseum.AppEditor
             var bench = GameObject.Find("Workbench");
             var board = GameObject.CreatePrimitive(PrimitiveType.Cube);
             board.name = "Tutorial Board";
-            Object.DestroyImmediate(board.GetComponent<Collider>()); // must not catch the ray aimed at the plan
+            UnityEngine.Object.DestroyImmediate(board.GetComponent<Collider>()); // must not catch the ray aimed at the plan
             if (bench != null) board.transform.SetParent(bench.transform, false);
             else board.transform.position = BenchPosition;
             board.transform.localPosition = new Vector3(0f, BoardCenterY - BoardSize.y / 2f - 0.3f, 0f);
