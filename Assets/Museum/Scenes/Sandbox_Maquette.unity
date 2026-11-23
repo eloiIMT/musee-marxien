@@ -209,10 +209,10 @@ TextMesh:
     \xB7 g\xE2chette cubes jaunes (coins) : largeur / longueur\n  Redimensionner
     \xB7 slider sur le mur du bas : hauteur (glisser, ou g\xE2chette sur la piste)\n 
     Cube rouge, 2 clics : supprimer la salle\n\nConnexions\n  Liaison \xB7 g\xE2chette
-    sph\xE8re orange, rel\xE2cher sur une salle : relier\n  Liaison \xB7 g\xE2chette
-    sur un c\xE2ble puis cube rouge : d\xE9connecter\n\n\u0152uvres (salle s\xE9lectionn\xE9e,
-    mode D\xE9placer)\n  G\xE2chette sur l'\u0153uvre : d\xE9placer \xB7 pr\xE8s
-    d'un mur : aimant\xE9e\n  Rel\xE2cher dans une autre salle : transf\xE9rer\n\nVert
+    sur une autre salle : relier (vert)\n  Liaison \xB7 g\xE2chette sur une salle
+    d\xE9j\xE0 reli\xE9e : d\xE9lier\n\n\u0152uvres (salle s\xE9lectionn\xE9e, mode
+    D\xE9placer)\n  G\xE2chette sur l'\u0153uvre : d\xE9placer \xB7 pr\xE8s d'un
+    mur : aimant\xE9e\n  Rel\xE2cher dans une autre salle : transf\xE9rer\n\nVert
     = possible \xB7 Rouge = refus\xE9 (retour en place)"
   m_OffsetZ: 0
   m_CharacterSize: 0.0042
@@ -596,7 +596,8 @@ MonoBehaviour:
   emptyMuseumScale: 0.04
   hoverColor: {r: 0.65, g: 0.85, b: 1, a: 1}
   selectedColor: {r: 0.3, g: 0.6, b: 1, a: 1}
-  targetColor: {r: 0.4, g: 1, b: 0.5, a: 1}
+  linkedColor: {r: 0.4, g: 1, b: 0.5, a: 1}
+  unlinkHoverColor: {r: 1, g: 0.55, b: 0.5, a: 1}
   selectedCableColor: {r: 0.2, g: 0.9, b: 1, a: 1}
 --- !u!114 &526327745
 MonoBehaviour:

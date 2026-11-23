@@ -63,7 +63,7 @@ namespace VirtualMuseum.App
         /// <summary>Ray of the hand pointing at the empty plan, or null (something selected, or the ray is elsewhere).</summary>
         Ray? PointingRay()
         {
-            if (board == null || !board.IsHovered || maquette.SelectedRoomId != null || maquette.SelectedConnection != null) return null;
+            if (board == null || !board.IsHovered || maquette.SelectedRoomId != null) return null;
             if (!board.TryGetHoveringInteractor(out var interactor)) return null;
             var origin = interactor is ICurveInteractionDataProvider curve && curve.curveOrigin != null ? curve.curveOrigin : interactor.transform;
             return new Ray(origin.position, origin.forward);

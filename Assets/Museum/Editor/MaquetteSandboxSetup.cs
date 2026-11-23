@@ -358,8 +358,8 @@ namespace VirtualMuseum.AppEditor
             "  Cube rouge, 2 clics : supprimer la salle\n" +
             "\n" +
             "Connexions\n" +
-            "  Liaison · gâchette sphère orange, relâcher sur une salle : relier\n" +
-            "  Liaison · gâchette sur un câble puis cube rouge : déconnecter\n" +
+            "  Liaison · gâchette sur une autre salle : relier (vert)\n" +
+            "  Liaison · gâchette sur une salle déjà reliée : délier\n" +
             "\n" +
             "Œuvres (salle sélectionnée, mode Déplacer)\n" +
             "  Gâchette sur l'œuvre : déplacer · près d'un mur : aimantée\n" +

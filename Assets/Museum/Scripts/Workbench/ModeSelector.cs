@@ -39,7 +39,7 @@ namespace VirtualMuseum.App
         {
             "Gâchette sur une salle pour la bouger",
             "Cubes jaunes : largeur / longueur · slider : hauteur",
-            "Gâchette sphère orange vers une salle",
+            "Gâchette sur une salle : relier / délier",
         };
 
         /// <summary>Fallback place when no right controller is tracked (desktop / simulator).</summary>

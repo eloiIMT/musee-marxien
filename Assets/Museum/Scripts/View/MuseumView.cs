@@ -32,14 +32,15 @@ namespace VirtualMuseum.App
         [SerializeField] bool showArtworkWarnings;
 
         [Header("Connections")]
-        [Tooltip("Cable width in museum metres (compensated for this object's scale).")]
-        [SerializeField] float cableWidth = 0.15f;
+        [Tooltip("Line width in museum metres (compensated for this object's scale).")]
+        [SerializeField] float cableWidth = 0.1f;
         [SerializeField] float cableHeight = 0.2f;
         [Tooltip("Off on the life-size museum: connections are an editing aid, the visitor never sees them.")]
         [SerializeField] bool showCables = true;
 
         readonly Dictionary<string, RoomView> rooms = new();
         readonly Dictionary<string, LineRenderer> cables = new();
+        readonly Dictionary<string, Transform> doors = new(); // "connectionKey#roomId"
         Transform roomsRoot, cablesRoot;
 
         /// <summary>Raised after every refresh, once all views match the model.</summary>
@@ -47,7 +48,7 @@ namespace VirtualMuseum.App
 
         public MuseumBackend Backend => backend;
         public IReadOnlyDictionary<string, RoomView> Rooms => rooms;
-        /// <summary>Connection cables by <see cref="ConnectionKey"/>; points are in museum coordinates.</summary>
+        /// <summary>Connection lines by <see cref="ConnectionKey"/> (door to door); points are in museum coordinates.</summary>
         public IReadOnlyDictionary<string, LineRenderer> Cables => cables;
         public RoomView GetRoomView(string roomId) => roomId != null && rooms.TryGetValue(roomId, out var rv) ? rv : null;
 
@@ -75,12 +76,7 @@ namespace VirtualMuseum.App
             if (backend != null) backend.Api.Changed -= OnChanged;
         }
 
-        void OnChanged(MuseumChange change)
-        {
-            // Whole museum replaced (Load / Reset): session-only attachment points no longer apply.
-            if (change.Entity == MuseumEntity.Museum && change.Operation == MuseumOperation.Reset) ConnectionAnchors.Clear();
-            Refresh();
-        }
+        void OnChanged(MuseumChange change) => Refresh();
 
         /// <summary>Re-read the model and bring every view in line with it.</summary>
         public void Refresh()
@@ -118,36 +114,70 @@ namespace VirtualMuseum.App
             }
         }
 
+        /// <summary>
+        /// Connections drawn as a door on the facing wall of each room (<see cref="ConnectionLayout"/>: computed,
+        /// spread when several share a wall) and a thin line between the two doors, just above the floor.
+        /// </summary>
         void SyncCables(Museum data)
         {
             var byId = data.rooms.ToDictionary(r => r.id);
-            var seen = new HashSet<string>();
+            var layout = ConnectionLayout.Compute(data);
             var up = Vector3.up * cableHeight;
-            foreach (var room in data.rooms)
+            float doorHeight = lowWallHeight + 0.15f;
+            foreach (var pair in layout)
             {
-                foreach (var otherId in room.connections)
+                var key = pair.Key;
+                var (da, db) = pair.Value;
+                var ra = byId[da.RoomId];
+                var rb = byId[db.RoomId];
+                if (!cables.TryGetValue(key, out var line) || line == null)
                 {
-                    if (!byId.TryGetValue(otherId, out var other)) continue;
-                    var key = ConnectionKey(room.id, otherId);
-                    if (!seen.Add(key)) continue; // second direction of the same link
-                    if (!cables.TryGetValue(key, out var line) || line == null)
-                    {
-                        line = CreateCable(key);
-                        cables[key] = line;
-                    }
-                    // Session attachment points if the organizer chose them, else the closest wall midpoints (after Load).
-                    var (pa, pb) = ConnectionAnchors.Endpoints(room, other);
-                    line.SetPosition(0, pa + up);
-                    line.SetPosition(1, pb + up);
-                    line.widthMultiplier = cableWidth * transform.lossyScale.x;
+                    line = CreateCable(key);
+                    cables[key] = line;
                 }
+                // From the outer face of one door to the outer face of the other.
+                var pa = MuseumSpatial.ToMuseum(ra, da.Local + da.Normal * (wallThickness / 2f));
+                var pb = MuseumSpatial.ToMuseum(rb, db.Local + db.Normal * (wallThickness / 2f));
+                line.SetPosition(0, pa + up);
+                line.SetPosition(1, pb + up);
+                line.widthMultiplier = cableWidth * transform.lossyScale.x;
+                PlaceDoor(key, ra, da, doorHeight);
+                PlaceDoor(key, rb, db, doorHeight);
             }
             foreach (var key in new List<string>(cables.Keys))
             {
-                if (seen.Contains(key)) continue;
+                if (layout.ContainsKey(key)) continue;
                 if (cables[key] != null) Destroy(cables[key].gameObject);
                 cables.Remove(key);
             }
+            foreach (var doorKey in new List<string>(doors.Keys))
+            {
+                var (a, b) = SplitKey(doorKey.Substring(0, doorKey.LastIndexOf('#')));
+                if (layout.ContainsKey(ConnectionKey(a, b))) continue;
+                if (doors[doorKey] != null) Destroy(doors[doorKey].gameObject);
+                doors.Remove(doorKey);
+            }
+        }
+
+        /// <summary>Door marker: a block straddling the wall at the door, a little taller than the plan's low walls.</summary>
+        void PlaceDoor(string connectionKey, Room room, Door door, float height)
+        {
+            var doorKey = connectionKey + "#" + room.id;
+            if (!doors.TryGetValue(doorKey, out var t) || t == null)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = "Door " + doorKey;
+                Destroy(go.GetComponent<Collider>());
+                go.transform.SetParent(cablesRoot, false);
+                var r = go.GetComponent<Renderer>();
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                if (cableMaterial != null) r.sharedMaterial = cableMaterial;
+                doors[doorKey] = t = go.transform;
+            }
+            float h = Mathf.Min(height, room.height);
+            t.localPosition = MuseumSpatial.ToMuseum(room, door.Local) + Vector3.up * (h / 2f);
+            t.localRotation = room.rotation * (door.AlongX ? Quaternion.identity : Quaternion.Euler(0f, 90f, 0f));
+            t.localScale = new Vector3(door.Width, h, wallThickness * 1.8f);
         }
 
         LineRenderer CreateCable(string key)

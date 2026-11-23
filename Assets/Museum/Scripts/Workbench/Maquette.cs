@@ -10,7 +10,9 @@ namespace VirtualMuseum.App
     /// board and the selected room "comes out" of it in 3D.
     /// - fits the miniature on the board (auto scale, no pan/zoom)
     /// - plan view: rooms flat, the hovered / selected room expands to 3D
-    /// - selection of rooms and connections (trigger), gizmo on the selected room
+    /// - selection of rooms (trigger), gizmo on the selected room
+    /// - connections, in the Link mode: trigger on another room links it to the selected one, or unlinks it if
+    ///   already linked; linked rooms are lit green, the selected room's connection lines too
     /// - coordinate helpers between hand (world) and museum space, user feedback (toast)
     /// </summary>
     [RequireComponent(typeof(MuseumView))]
@@ -30,7 +32,9 @@ namespace VirtualMuseum.App
         [Header("Feedback colours")]
         [SerializeField] Color hoverColor = new Color(0.65f, 0.85f, 1f);
         [SerializeField] Color selectedColor = new Color(0.3f, 0.6f, 1f);
-        [SerializeField] Color targetColor = new Color(0.4f, 1f, 0.5f);
+        [UnityEngine.Serialization.FormerlySerializedAs("targetColor")]
+        [SerializeField] Color linkedColor = new Color(0.4f, 1f, 0.5f);
+        [SerializeField] Color unlinkHoverColor = new Color(1f, 0.55f, 0.5f);
         [SerializeField] Color selectedCableColor = new Color(0.2f, 0.9f, 1f);
 
         public MuseumView View { get; private set; }
@@ -45,8 +49,7 @@ namespace VirtualMuseum.App
 
         public string SelectedRoomId { get; private set; }
         public string HoveredRoomId { get; private set; }
-        public string SelectedConnection { get; private set; }
-        /// <summary>Raised when the selected room or connection changes (for the screen UI).</summary>
+        /// <summary>Raised when the selected room changes.</summary>
         public event Action SelectionChanged;
 
         /// <summary>Which handles the user works with (picked with the mode selector above the board).</summary>
@@ -54,14 +57,11 @@ namespace VirtualMuseum.App
         public event Action ModeChanged;
         ModeSelector modeSelector;
 
-        string targetRoomId;
         RoomGizmo gizmo;
-        Transform disconnectButton;
         TextMesh toast;
         float toastUntil;
         readonly HashSet<RoomView> wiredRooms = new();
         readonly HashSet<GameObject> wiredArtworks = new();
-        readonly Dictionary<LineRenderer, string> wiredCables = new();
 
         void Awake()
         {
@@ -82,8 +82,6 @@ namespace VirtualMuseum.App
             gizmo.transform.SetParent(transform, false);
             gizmo.Init(this);
 
-            disconnectButton = CreateButton("Disconnect", new Color(1f, 0.25f, 0.2f), DisconnectSelected);
-
             if (board != null)
             {
                 var c = board.GetComponent<Clickable>();
@@ -93,7 +91,7 @@ namespace VirtualMuseum.App
                 creator.Init(c);
                 c.Clicked += (_, interactor) =>
                 {
-                    if (SelectedRoomId != null || SelectedConnection != null) ClearSelection();
+                    if (SelectedRoomId != null) ClearSelection();
                     else creator.Click(interactor);
                 };
             }
@@ -124,7 +122,6 @@ namespace VirtualMuseum.App
         void Update()
         {
             if (toast != null && toast.gameObject.activeSelf && Time.time > toastUntil) toast.gameObject.SetActive(false);
-            UpdateDisconnectButton();
             UpdateModeSelectorVisibility();
         }
 
@@ -186,7 +183,7 @@ namespace VirtualMuseum.App
                 if (!wiredRooms.Add(rv)) continue;
                 var id = rv.RoomId;
                 var c = rv.Floor.AddComponent<Clickable>();
-                c.Clicked += (_, _) => SelectRoom(id);
+                c.Clicked += (_, _) => OnRoomClicked(id);
                 c.HoverChanged += hovered =>
                 {
                     if (hovered) HoveredRoomId = id;
@@ -216,24 +213,7 @@ namespace VirtualMuseum.App
                 }
             }
 
-            var dead = new List<LineRenderer>();
-            foreach (var line in wiredCables.Keys) if (line == null) dead.Add(line);
-            foreach (var line in dead) wiredCables.Remove(line);
-            foreach (var pair in View.Cables)
-            {
-                if (!wiredCables.ContainsKey(pair.Value))
-                {
-                    wiredCables[pair.Value] = pair.Key;
-                    var key = pair.Key;
-                    var hit = new GameObject("Hit", typeof(BoxCollider));
-                    hit.transform.SetParent(pair.Value.transform, false);
-                    hit.AddComponent<Clickable>().Clicked += (_, _) => { if (Mode == EditMode.Link) SelectConnection(key); };
-                }
-                FitCableCollider(pair.Value);
-            }
-
             if (SelectedRoomId != null && View.GetRoomView(SelectedRoomId) == null) SelectRoom(null);
-            if (SelectedConnection != null && !View.Cables.ContainsKey(SelectedConnection)) SelectConnection(null);
             ApplyModeToHandles();
             UpdateVisuals();
         }
@@ -244,8 +224,8 @@ namespace VirtualMuseum.App
         {
             if (mode == Mode) return;
             Mode = mode;
-            if (mode != EditMode.Link && SelectedConnection != null) SelectConnection(null);
             ApplyModeToHandles();
+            UpdateVisuals();
             ModeChanged?.Invoke();
         }
 
@@ -267,33 +247,37 @@ namespace VirtualMuseum.App
             }
         }
 
-        static void FitCableCollider(LineRenderer line)
+        // ---------------------------------------------------------------- selection / links
+
+        /// <summary>Trigger on a room floor: in the Link mode, (un)link it with the selected room; otherwise select it.</summary>
+        void OnRoomClicked(string id)
         {
-            var hit = line.transform.Find("Hit");
-            if (hit == null) return;
-            var a = line.GetPosition(0);
-            var b = line.GetPosition(1);
-            var dir = b - a;
-            hit.localPosition = (a + b) / 2f;
-            hit.localRotation = dir.sqrMagnitude > 1e-6f ? Quaternion.LookRotation(dir) : Quaternion.identity;
-            hit.GetComponent<BoxCollider>().size = new Vector3(0.8f, 0.8f, Mathf.Max(dir.magnitude - 0.5f, 0.2f));
+            if (Mode == EditMode.Link && SelectedRoomId != null && id != SelectedRoomId) ToggleLink(SelectedRoomId, id);
+            else SelectRoom(id);
         }
 
-        // ---------------------------------------------------------------- selection
+        /// <summary>Link two rooms, or unlink them if they already are (the selection stays on the first room).</summary>
+        public void ToggleLink(string a, string b)
+        {
+            var ra = Api.GetRoom(a);
+            var rb = Api.GetRoom(b);
+            if (ra == null || rb == null) return;
+            if (ra.connections.Contains(b))
+            {
+                Api.DisconnectRooms(a, b);
+                Toast($"« {ra.name} » et « {rb.name} » ne sont plus reliées");
+            }
+            else
+            {
+                Api.ConnectRooms(a, b);
+                Toast($"« {ra.name} » ↔ « {rb.name} » reliées");
+            }
+            UpdateVisuals();
+        }
 
         public void SelectRoom(string roomId)
         {
             SelectedRoomId = roomId;
-            SelectedConnection = null;
-            SyncModeSelector();
-            UpdateVisuals();
-            SelectionChanged?.Invoke();
-        }
-
-        public void SelectConnection(string key)
-        {
-            SelectedConnection = key;
-            if (key != null) SelectedRoomId = null;
             SyncModeSelector();
             UpdateVisuals();
             SelectionChanged?.Invoke();
@@ -301,22 +285,20 @@ namespace VirtualMuseum.App
 
         public void ClearSelection()
         {
-            if (SelectedRoomId == null && SelectedConnection == null) return;
+            if (SelectedRoomId == null) return;
             SelectedRoomId = null;
-            SelectedConnection = null;
             SyncModeSelector();
             UpdateVisuals();
             SelectionChanged?.Invoke();
         }
 
         /// <summary>
-        /// The mode selector (on the controller) is shown while a room or a connection is selected. With nothing
+        /// The mode selector (on the controller) is shown while a room is selected. With nothing
         /// selected the user is back in the Move mode, so the next selection starts there.
         /// </summary>
         void SyncModeSelector()
         {
-            bool selected = SelectedRoomId != null || SelectedConnection != null;
-            if (!selected && Mode != EditMode.Move) SetMode(EditMode.Move);
+            if (SelectedRoomId == null && Mode != EditMode.Move) SetMode(EditMode.Move);
             UpdateModeSelectorVisibility();
         }
 
@@ -327,7 +309,7 @@ namespace VirtualMuseum.App
         void UpdateModeSelectorVisibility()
         {
             if (modeSelector == null) return;
-            bool show = isActiveAndEnabled && (SelectedRoomId != null || SelectedConnection != null) && IsRayOnBoard();
+            bool show = isActiveAndEnabled && SelectedRoomId != null && IsRayOnBoard();
             if (modeSelector.gameObject.activeSelf != show) modeSelector.gameObject.SetActive(show);
         }
 
@@ -370,65 +352,37 @@ namespace VirtualMuseum.App
             return false;
         }
 
-        /// <summary>Highlight a room as a drop target (connection drag); null clears.</summary>
-        public void SetTargetRoom(string roomId)
-        {
-            if (targetRoomId == roomId) return;
-            targetRoomId = roomId;
-            UpdateVisuals();
-        }
-
         void UpdateVisuals()
         {
+            var selectedRoom = SelectedRoomId != null ? Api.GetRoom(SelectedRoomId) : null;
+            bool linking = Mode == EditMode.Link && selectedRoom != null;
             foreach (var rv in View.Rooms.Values)
             {
                 var id = rv.RoomId;
                 bool selected = id == SelectedRoomId;
                 bool hovered = id == HoveredRoomId;
                 rv.Expanded = selected || (hovered && SelectedRoomId == null);
-                rv.SetFloorTint(id == targetRoomId ? targetColor : selected ? selectedColor : hovered ? hoverColor : (Color?)null);
+                Color? tint = null;
+                if (selected) tint = selectedColor;
+                else if (linking)
+                {
+                    // Link mode: linked rooms green; hovering shows what the trigger will do (link / unlink).
+                    bool linked = selectedRoom.connections.Contains(id);
+                    if (hovered) tint = linked ? unlinkHoverColor : Color.Lerp(hoverColor, linkedColor, 0.5f);
+                    else if (linked) tint = linkedColor;
+                }
+                else if (hovered) tint = hoverColor;
+                rv.SetFloorTint(tint);
             }
+            // The selected room's connection lines stand out.
             foreach (var pair in View.Cables)
             {
                 var r = pair.Value.GetComponent<Renderer>();
-                if (pair.Key == SelectedConnection) Tint.Set(r, selectedCableColor); else Tint.Clear(r);
+                var (a, b) = MuseumView.SplitKey(pair.Key);
+                if (SelectedRoomId != null && (a == SelectedRoomId || b == SelectedRoomId)) Tint.Set(r, selectedCableColor);
+                else Tint.Clear(r);
             }
             gizmo.Attach(View.GetRoomView(SelectedRoomId));
-        }
-
-        // ---------------------------------------------------------------- connection removal
-
-        void UpdateDisconnectButton()
-        {
-            bool show = SelectedConnection != null && View.Cables.TryGetValue(SelectedConnection, out var line) && line != null;
-            disconnectButton.gameObject.SetActive(show);
-            if (!show) return;
-            line = View.Cables[SelectedConnection];
-            var mid = (line.GetPosition(0) + line.GetPosition(1)) / 2f;
-            disconnectButton.localPosition = mid + Vector3.up * 1.2f;
-            disconnectButton.localScale = Vector3.one * (0.03f / Scale);
-        }
-
-        /// <summary>Remove the selected connection (also callable from the screen UI).</summary>
-        public void DisconnectSelected()
-        {
-            if (SelectedConnection == null) return;
-            var (a, b) = MuseumView.SplitKey(SelectedConnection);
-            SelectConnection(null);
-            Api.DisconnectRooms(a, b);
-            Toast("Connexion supprimée");
-        }
-
-        Transform CreateButton(string buttonName, Color color, Action onClick)
-        {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = buttonName;
-            go.transform.SetParent(transform, false);
-            go.GetComponent<Renderer>().sharedMaterial = handleMaterial;
-            Tint.Set(go.GetComponent<Renderer>(), color);
-            go.AddComponent<Clickable>().Clicked += (_, _) => onClick();
-            go.SetActive(false);
-            return go.transform;
         }
 
         // ---------------------------------------------------------------- coordinates

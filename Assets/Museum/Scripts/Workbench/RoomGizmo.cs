@@ -9,14 +9,13 @@ namespace VirtualMuseum.App
     ///  - Move:   centre sphere (blue): move / rotate (trigger)
     ///  - Resize: 4 floor corners (yellow): width / length (trigger) · glass slider on top of the bottom wall: height
     ///            (trigger and slide, or trigger on the track)
-    ///  - Link:   4 wall spheres (orange): pull a connection (trigger, release over another room)
+    ///  - Link:   no handle: trigger on another room links / unlinks it (see Maquette)
     ///  - always: top-right trash icon (red): delete, click twice (trigger)
     /// Handle size is constant in world space so they stay grabbable whatever the miniature scale.
     /// </summary>
     public class RoomGizmo : MonoBehaviour
     {
-        const float MoveSize = 0.035f, CornerSize = 0.022f, ConnectSize = 0.02f, DeleteSize = 0.03f;
-        const float ConnectorOffset = 0.8f; // museum metres outside the wall
+        const float MoveSize = 0.035f, CornerSize = 0.022f, DeleteSize = 0.03f;
 
         Maquette maquette;
         RoomView room;
@@ -24,7 +23,6 @@ namespace VirtualMuseum.App
         Transform move, delete;
         HeightSlider heightSlider;
         readonly ResizeHandle[] corners = new ResizeHandle[4];
-        readonly ConnectHandle[] connectors = new ConnectHandle[4];
         DeleteButton deleteButton;
 
         public void Init(Maquette owner)
@@ -39,8 +37,6 @@ namespace VirtualMuseum.App
                 i++;
             }
             heightSlider = HeightSlider.Create(transform, owner);
-            for (int w = 0; w < 4; w++)
-                connectors[w] = Create<ConnectHandle>(PrimitiveType.Sphere, "Connect", new Color(1f, 0.55f, 0.1f), ConnectSize);
 
             deleteButton = DeleteButton.Create(transform, owner);
             delete = deleteButton.transform;
@@ -85,7 +81,6 @@ namespace VirtualMuseum.App
             SetVisible(move.gameObject, mode == EditMode.Move);
             foreach (var c in corners) SetVisible(c.gameObject, mode == EditMode.Resize);
             SetVisible(heightSlider.gameObject, mode == EditMode.Resize);
-            foreach (var c in connectors) SetVisible(c.gameObject, mode == EditMode.Link);
 
             move.localPosition = new Vector3(0, 0.6f, 0);
             foreach (var c in corners) c.transform.localPosition = new Vector3(c.SignX * hw, 0.3f, c.SignZ * hl);
@@ -93,10 +88,6 @@ namespace VirtualMuseum.App
             // Icon fully above the wall top: lift by its own (constant world) size plus a small gap.
             float deleteLift = DeleteSize * 0.75f / Mathf.Max(transform.lossyScale.y, 1e-5f);
             delete.localPosition = new Vector3(hw, h + deleteLift, -hl);
-            connectors[0].transform.localPosition = new Vector3(0, 0.3f, hl + ConnectorOffset);
-            connectors[1].transform.localPosition = new Vector3(0, 0.3f, -hl - ConnectorOffset);
-            connectors[2].transform.localPosition = new Vector3(hw + ConnectorOffset, 0.3f, 0);
-            connectors[3].transform.localPosition = new Vector3(-hw - ConnectorOffset, 0.3f, 0);
 
             float parentScale = Mathf.Max(transform.lossyScale.x, 1e-5f);
             foreach (var (t, size) in handles) t.localScale = Vector3.one * (size / parentScale);
