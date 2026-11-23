@@ -1,7 +1,7 @@
 {
   "name": "Museum.App.Tests.Editor",
   "rootNamespace": "VirtualMuseum.App.Tests",
-  "references": ["VirtualMuseum", "Museum.App"],
+  "references": ["VirtualMuseum", "Museum.App", "Unity.XR.Interaction.Toolkit"],
   "includePlatforms": ["Editor"],
   "optionalUnityReferences": ["TestAssemblies"]
 }
