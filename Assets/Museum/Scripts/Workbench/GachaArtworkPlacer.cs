@@ -25,6 +25,8 @@ namespace VirtualMuseum.App
         MuseumBackend backend;
         Maquette maquette;
         XRGrabInteractable grab;
+        Transform visual;
+        Bounds visualBounds;
         bool ghostShown;
 
         // Last preview
@@ -35,13 +37,67 @@ namespace VirtualMuseum.App
 
         public ArtworkDefinition Definition => definition;
 
-        public void Init(ArtworkDefinition artwork, MuseumBackend museumBackend)
+        /// <summary>False while the artwork is still shut in the capsule (see <see cref="Open"/>).</summary>
+        public bool Opened { get; private set; }
+
+        /// <param name="artworkVisual">Artwork miniature, child of the capsule, at scale 1 with no offset.</param>
+        public void Init(ArtworkDefinition artwork, MuseumBackend museumBackend, Transform artworkVisual = null)
         {
             definition = artwork;
             backend = museumBackend;
+            visual = artworkVisual;
+            if (visual != null) visualBounds = LocalBounds(visual);
+            MatchPlanScale();
+        }
+
+        /// <summary>The capsule was grabbed: the artwork no longer has to fit inside it.</summary>
+        public void Open()
+        {
+            Opened = true;
+            MatchPlanScale();
         }
 
         void Awake() => grab = GetComponent<XRGrabInteractable>();
+
+        /// <summary>
+        /// Same world size as the artworks drawn on the plan (prefab at scale 1 under the maquette, see RoomView),
+        /// but while the capsule is closed never bigger than its inside. Centred on the capsule. Re-applied every
+        /// frame: the maquette rescales itself when rooms change.
+        /// </summary>
+        void MatchPlanScale()
+        {
+            if (visual == null) return;
+            if (maquette == null) maquette = FindAnyObjectByType<Maquette>();
+            float fit = 2f * GachaCapsuleMesh.InnerRadius / Mathf.Max(visualBounds.size.magnitude, 1e-4f);
+            float scale = fit;
+            if (maquette != null)
+            {
+                scale = maquette.Scale / Mathf.Max(transform.lossyScale.x, 1e-5f);
+                if (!Opened) scale = Mathf.Min(scale, fit);
+            }
+            var localScale = Vector3.one * scale;
+            if (visual.localScale != localScale) visual.localScale = localScale;
+            visual.localPosition = -visualBounds.center * scale;
+        }
+
+        /// <summary>Bounds of the renderers under <paramref name="root"/>, in its own space.</summary>
+        static Bounds LocalBounds(Transform root)
+        {
+            var bounds = new Bounds();
+            bool any = false;
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                var b = r.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var corner = root.InverseTransformPoint(new Vector3(
+                        (i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z));
+                    if (any) bounds.Encapsulate(corner);
+                    else { bounds = new Bounds(corner, Vector3.zero); any = true; }
+                }
+            }
+            return bounds;
+        }
 
         void OnEnable() => grab.selectExited.AddListener(OnReleased);
 
@@ -53,6 +109,7 @@ namespace VirtualMuseum.App
 
         void Update()
         {
+            MatchPlanScale();
             if (definition == null || !grab.isSelected) { HideGhost(); return; }
             if (!Preview()) HideGhost();
         }

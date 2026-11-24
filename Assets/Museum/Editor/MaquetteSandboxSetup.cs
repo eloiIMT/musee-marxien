@@ -201,7 +201,6 @@ namespace VirtualMuseum.AppEditor
             model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             model.transform.position += originalCenter - GetCombinedBounds(renderers).center;
 
-            var capsuleMaterial = GetOrCreateMaterial("GachaCapsule", new Color(1f, 0.18f, 0.62f), true);
             var displayMaterial = GetOrCreateMaterial("GachaDisplay", new Color(0.08f, 0.09f, 0.11f), false);
 
             var front = bounds.min.z - 0.06f;
@@ -221,9 +220,8 @@ namespace VirtualMuseum.AppEditor
             instructions.anchor = TextAnchor.MiddleCenter;
 
             var dispenser = machine.AddComponent<GachaDispenser>();
-            var serialized = new SerializedObject(dispenser);
-            serialized.FindProperty("capsuleMaterial").objectReferenceValue = capsuleMaterial;
-            serialized.ApplyModifiedPropertiesWithoutUndo();
+            var (capsuleColor, capsuleClear) = GachaCapsuleMaterials.GetOrCreate();
+            GachaCapsuleMaterials.Assign(dispenser, capsuleColor, capsuleClear);
             SetupGachaCrank(machine.transform);
 
             Undo.RegisterCreatedObjectUndo(machine, "Add Gacha Machine");
@@ -270,10 +268,6 @@ namespace VirtualMuseum.AppEditor
         /// <summary>Old machines: front button + tray at the bottom. Replace them with the knob and the right-hand cup.</summary>
         static void UpgradeGachaMachine(Transform machine)
         {
-            Material capsuleMaterial = null;
-            var oldDispenser = machine.GetComponentInChildren<GachaDispenser>(true);
-            if (oldDispenser != null)
-                capsuleMaterial = new SerializedObject(oldDispenser).FindProperty("capsuleMaterial").objectReferenceValue as Material;
             foreach (var name in new[] { "Press To Dispense Button", "Capsule Output Tray", "Capsule Output Label" })
             {
                 var old = machine.Find(name);
@@ -289,10 +283,8 @@ namespace VirtualMuseum.AppEditor
 
             var dispenser = machine.GetComponent<GachaDispenser>();
             if (dispenser == null) dispenser = Undo.AddComponent<GachaDispenser>(machine.gameObject);
-            var serialized = new SerializedObject(dispenser);
-            serialized.FindProperty("capsuleMaterial").objectReferenceValue =
-                capsuleMaterial != null ? capsuleMaterial : GetOrCreateMaterial("GachaCapsule", new Color(1f, 0.18f, 0.62f), true);
-            serialized.ApplyModifiedPropertiesWithoutUndo();
+            var (capsuleColor, capsuleClear) = GachaCapsuleMaterials.GetOrCreate();
+            GachaCapsuleMaterials.Assign(dispenser, capsuleColor, capsuleClear);
             SetupGachaCrank(machine);
         }
 

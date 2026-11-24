@@ -365,7 +365,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.GachaDispenser
   capsuleSpawnPoint: {fileID: 6875602843574879191}
   capsuleRestPoint: {fileID: 5937325737403979228}
-  capsuleMaterial: {fileID: 2100000, guid: d2beb9c711e157e48941d6e7f06ed855, type: 2}
+  capsuleColorMaterial: {fileID: 2100000, guid: d2beb9c711e157e48941d6e7f06ed855, type: 2}
+  capsuleClearMaterial: {fileID: 2100000, guid: 4604db261d01c2b40b25db9ce118583d, type: 2}
   capsuleDiameter: 0.1
   dropDuration: 0.45
 --- !u!1 &7846503717210540044

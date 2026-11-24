@@ -1306,6 +1306,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 2747781619920077905, guid: 3ad620cde1b901b4a8444fab68fb45c2, type: 3}
+      propertyPath: capsuleClearMaterial
+      value: 
+      objectReference: {fileID: 2100000, guid: 4604db261d01c2b40b25db9ce118583d, type: 2}
     - target: {fileID: 5354369585247160774, guid: 3ad620cde1b901b4a8444fab68fb45c2, type: 3}
       propertyPath: m_LocalPosition.x
       value: 3.251
