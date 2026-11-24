@@ -9,7 +9,7 @@ namespace VirtualMuseum.App
     /// the workbench behind the user. Everything with the ray + TRIGGER:
     ///  - left column: the tours (select), "+ Nouveau parcours";
     ///  - right column, selected tour: "Proposer aux visiteurs" (backend session = the tour offered to visitors),
-    ///    "Supprimer" (two clicks), and two tabs:
+    ///    "Supprimer" (two clicks), "Renommer" (on-screen AZERTY keyboard in place of the list), and two tabs:
     ///      Étapes: ordered artworks, ↑ ↓ to reorder, × to remove; under each step its room and the rooms to cross
     ///              from the previous step (shortest path on the room connections), red when unreachable;
     ///      Ajouter: every artwork of the museum, "+" appends it to the tour.
@@ -23,6 +23,7 @@ namespace VirtualMuseum.App
         const float DalleWidth = 0.379f, DalleHeight = 0.2337f, DalleCentreY = 0.1713f, DalleTilt = 8f;
         const int TourRows = 5, ListRows = 5;
         const float M = 0.025f;
+        const int MaxNameLength = 32;
         static readonly Color ScreenColor = new Color(0.04f, 0.07f, 0.11f);
         static readonly Color RowA = new Color(0.07f, 0.1f, 0.15f), RowB = new Color(0.05f, 0.08f, 0.12f);
         static readonly Color TourColor = new Color(0.2f, 0.3f, 0.42f);
@@ -43,11 +44,19 @@ namespace VirtualMuseum.App
 
         Transform display, dynamicRoot;
         TextMesh status, tourName, route, emptyText, tourPageText, listPageText;
-        UiButton newTour, offer, delete, stepsTab, addTab, tourPrev, tourNext, listPrev, listNext;
+        UiButton newTour, offer, delete, rename, stepsTab, addTab, tourPrev, tourNext, listPrev, listNext;
         string selectedTourId;
         Tab tab = Tab.Steps;
         int tourPage, listPage;
         bool dirty = true;
+
+        // Rename keyboard (static, shown in place of the tabs and list while renaming).
+        Transform keyboard;
+        TextMesh draftText;
+        readonly List<(UiButton button, string ch)> charKeys = new List<(UiButton, string)>();
+        UiButton shiftKey;
+        bool renaming, shift;
+        string draft = "", renameTourId;
         float confirmDeleteUntil, statusUntil;
 
         void Awake()
@@ -111,6 +120,9 @@ namespace VirtualMuseum.App
             stepsTab.Clicked += () => { tab = Tab.Steps; listPage = 0; dirty = true; };
             addTab = UiButton.Create(display, "+ Ajouter", new Vector3(rx + 0.265f, top - 0.135f, -0.01f), new Vector2(0.17f, 0.042f), TourColor, 0.021f);
             addTab.Clicked += () => { tab = Tab.Add; listPage = 0; dirty = true; };
+            rename = UiButton.Create(display, "Renommer", new Vector3(right - 0.09f, top - 0.135f, -0.01f), new Vector2(0.17f, 0.042f), TourColor, 0.021f);
+            rename.Clicked += StartRename;
+            BuildKeyboard(rx, right, top - 0.135f);
 
             listPrev = SmallButton("←", new Vector3(right - 0.17f, -H / 2f + M + 0.025f, -0.01f));
             listNext = SmallButton("→", new Vector3(right - 0.02f, -H / 2f + M + 0.025f, -0.01f));
@@ -122,6 +134,45 @@ namespace VirtualMuseum.App
         }
 
         UiButton SmallButton(string label, Vector3 pos) => UiButton.Create(display, label, pos, new Vector2(0.042f, 0.042f), SmallColor, 0.026f);
+
+        /// <summary>Name field + AZERTY keys (10 per row) over the right column, from the tabs row down.</summary>
+        void BuildKeyboard(float x0, float x1, float fieldY)
+        {
+            keyboard = new GameObject("Keyboard").transform;
+            keyboard.SetParent(display, false);
+            float w = x1 - x0, pitch = w / 10f, gap = 0.006f, rowStep = 0.054f;
+            UiKit.Plate(keyboard, "Field", new Vector3(x0 + w / 2f, fieldY, -0.003f), new Vector3(w, 0.046f, 0.001f), RowA);
+            draftText = UiKit.Text(keyboard, "", new Vector3(x0 + 0.012f, fieldY, -0.004f), 0.026f, Color.white, TextAnchor.MiddleLeft);
+
+            float X(float units) => x0 + pitch * units; // centre of a key spanning [units - span/2, units + span/2]
+            UiButton Key(string label, float centreUnits, float y, float spanUnits, Color color) =>
+                UiButton.Create(keyboard, label, new Vector3(X(centreUnits), y, -0.01f), new Vector2(pitch * spanUnits - gap, rowStep - gap), color, 0.024f);
+            void CharKey(string ch, float centreUnits, float y)
+            {
+                var b = Key(ch, centreUnits, y, 1, SmallColor);
+                b.Clicked += () => Type(ch);
+                charKeys.Add((b, ch));
+            }
+
+            string[] rows = { "1234567890", "azertyuiop", "qsdfghjklm", "wxcvbnéè'-" };
+            float y0 = fieldY - 0.062f;
+            for (int r = 0; r < rows.Length; r++)
+                for (int i = 0; i < rows[r].Length; i++)
+                    CharKey(rows[r][i].ToString(), i + 0.5f, y0 - r * rowStep);
+
+            float y = y0 - rows.Length * rowStep;
+            shiftKey = Key("Maj", 1f, y, 2, SmallColor);
+            shiftKey.Clicked += () => { shift = !shift; RefreshKeyboard(); };
+            CharKey("à", 2.5f, y);
+            CharKey("ç", 3.5f, y);
+            Key("Espace", 6f, y, 4, SmallColor).Clicked += () => Type(" ");
+            Key("Effacer", 9f, y, 2, SmallColor).Clicked += Backspace;
+
+            y -= rowStep + 0.01f;
+            Key("Annuler", 5.5f, y, 3, SmallColor).Clicked += () => { renaming = false; dirty = true; };
+            Key("Valider", 8.5f, y, 3, NewColor).Clicked += CommitRename;
+            keyboard.gameObject.SetActive(false);
+        }
 
         // ---------------------------------------------------------------- dynamic content
 
@@ -160,7 +211,7 @@ namespace VirtualMuseum.App
                 var b = UiButton.Create(dynamicRoot, label, new Vector3(left + 0.14f, top - 0.125f - i * 0.058f, -0.01f), new Vector2(0.28f, 0.05f), TourColor, 0.021f);
                 b.Selected = t.id == selectedTourId;
                 var id = t.id;
-                b.Clicked += () => { selectedTourId = id; listPage = 0; confirmDeleteUntil = 0; dirty = true; };
+                b.Clicked += () => { selectedTourId = id; listPage = 0; confirmDeleteUntil = 0; renaming = false; dirty = true; };
             }
             bool pagedTours = tourPages > 1;
             tourPrev.gameObject.SetActive(pagedTours);
@@ -173,7 +224,9 @@ namespace VirtualMuseum.App
 
             // Selected tour header.
             bool hasTour = tour != null;
-            foreach (var b in new[] { offer, delete, stepsTab, addTab }) b.gameObject.SetActive(hasTour);
+            if (tour?.id != renameTourId) renaming = false; // renamed tour deleted meanwhile
+            keyboard.gameObject.SetActive(renaming);
+            foreach (var b in new[] { offer, delete, rename, stepsTab, addTab }) b.gameObject.SetActive(hasTour && !renaming);
             route.text = "";
             if (!hasTour)
             {
@@ -185,6 +238,14 @@ namespace VirtualMuseum.App
                 return;
             }
             tourName.text = UiKit.Wrap(Name(tour), 16, 1);
+            if (renaming)
+            {
+                emptyText.text = "";
+                listPrev.gameObject.SetActive(false);
+                listNext.gameObject.SetActive(false);
+                listPageText.text = "";
+                return;
+            }
             bool offered = tour.id == session.tourId;
             offer.SetLabel(offered ? "• Proposé aux visiteurs" : "Proposer aux visiteurs");
             offer.SetColor(offered ? NewColor : OfferColor);
@@ -318,6 +379,7 @@ namespace VirtualMuseum.App
             while (names.Contains("Parcours " + n)) n++;
             var t = Api.CreateTour("Parcours " + n);
             selectedTourId = t.id;
+            renaming = false;
             tab = Tab.Add;
             listPage = 0;
             tourPage = int.MaxValue; // clamped to the last page, where the new tour is
@@ -347,6 +409,63 @@ namespace VirtualMuseum.App
             Api.DeleteTour(selectedTourId);
             selectedTourId = null;
             Status($"« {name} » supprimé.", UiKit.MutedText);
+        }
+
+        void StartRename()
+        {
+            if (selectedTourId == null) return;
+            draft = Api.GetTour(selectedTourId).name ?? "";
+            if (draft.Length > MaxNameLength) draft = draft.Substring(0, MaxNameLength);
+            shift = draft.Length == 0;
+            renaming = true;
+            renameTourId = selectedTourId;
+            confirmDeleteUntil = 0;
+            RefreshKeyboard();
+            dirty = true;
+        }
+
+        void Type(string ch)
+        {
+            if (draft.Length >= MaxNameLength)
+            {
+                Sounds.Play(Sounds.Error, 0.5f);
+                Status($"{MaxNameLength} caractères maximum.", UiKit.Error);
+                return;
+            }
+            draft += shift ? ch.ToUpperInvariant() : ch;
+            shift = false;
+            RefreshKeyboard();
+        }
+
+        void Backspace()
+        {
+            if (draft.Length > 0) draft = draft.Substring(0, draft.Length - 1);
+            if (draft.Length == 0) shift = true; // capitalise the first letter
+            RefreshKeyboard();
+        }
+
+        void RefreshKeyboard()
+        {
+            draftText.text = draft + "_";
+            foreach (var (button, ch) in charKeys) button.SetLabel(shift ? ch.ToUpperInvariant() : ch);
+            shiftKey.Selected = shift;
+            shiftKey.SetColor(shift ? OfferColor : SmallColor);
+        }
+
+        void CommitRename()
+        {
+            var name = draft.Trim();
+            if (name.Length == 0)
+            {
+                Sounds.Play(Sounds.Error, 0.5f);
+                Status("Le nom ne peut pas être vide.", UiKit.Error);
+                return;
+            }
+            var id = renameTourId;
+            var description = Api.GetTour(id).description;
+            renaming = false;
+            dirty = true;
+            Edit(() => Api.EditTour(id, name, description), $"Parcours renommé « {name} ».");
         }
 
         void Edit(System.Action change, string message = null)

@@ -75,23 +75,24 @@ namespace VirtualMuseum.App
         }
 
         /// <summary>Quarter-circle profile (radius, y) from <paramref name="fromDeg"/> to <paramref name="toDeg"/>.</summary>
-        static List<(Vector2 p, Vector2 n)> Dome(float radius, float centerY, float fromDeg, float toDeg, bool inward)
+        internal static List<(Vector2 p, Vector2 n)> Dome(float radius, float centerY, float fromDeg, float toDeg, bool inward)
         {
             var points = new List<(Vector2, Vector2)>(DomeSteps + 1);
             for (int i = 0; i <= DomeSteps; i++)
             {
                 float a = Mathf.Lerp(fromDeg, toDeg, i / (float)DomeSteps) * Mathf.Deg2Rad;
                 var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                if (Mathf.Abs(dir.x) < 1e-5f) dir.x = 0f; // exact pole: cos(90°) is not quite 0 in floats
                 points.Add((new Vector2(radius * dir.x, centerY + radius * dir.y), inward ? -dir : dir));
             }
             return points;
         }
 
-        static List<(Vector2 p, Vector2 n)> Line(Vector2 from, Vector2 to, Vector2 normal) =>
+        internal static List<(Vector2 p, Vector2 n)> Line(Vector2 from, Vector2 to, Vector2 normal) =>
             new() { (from, normal), (to, normal) };
 
         /// <summary>Revolve a (radius, y) profile around Y; faces end up front-facing on the side of the given normals.</summary>
-        static void Lathe(List<(Vector2 p, Vector2 n)> profile, List<Vector3> vertices, List<Vector3> normals, List<int> triangles)
+        internal static void Lathe(List<(Vector2 p, Vector2 n)> profile, List<Vector3> vertices, List<Vector3> normals, List<int> triangles)
         {
             int start = vertices.Count;
             int ring = Segments + 1;
@@ -120,21 +121,23 @@ namespace VirtualMuseum.App
         }
 
         /// <summary>Flip the faces just added if they face away from their normals (keeps Lathe direction-agnostic).</summary>
-        static void FixWinding(int start, int rows, int ring, List<Vector3> vertices, List<Vector3> normals, List<int> triangles)
+        internal static void FixWinding(int start, int rows, int ring, List<Vector3> vertices, List<Vector3> normals, List<int> triangles)
         {
             int added = (rows - 1) * (ring - 1) * 6;
             int first = triangles.Count - added;
+            // Judge on the biggest face: faces at a pole are (nearly) degenerate and their orientation is noise.
+            float bestArea = 0f, bestDot = 0f;
             for (int t = first; t < triangles.Count; t += 3)
             {
                 var a = vertices[triangles[t]];
                 var face = Vector3.Cross(vertices[triangles[t + 1]] - a, vertices[triangles[t + 2]] - a);
-                if (face.sqrMagnitude < 1e-12f) continue; // degenerate at a pole: look at the next one
-                var normal = normals[triangles[t]] + normals[triangles[t + 1]] + normals[triangles[t + 2]];
-                if (Vector3.Dot(face, normal) >= 0f) return;
-                for (int u = first; u < triangles.Count; u += 3)
-                    (triangles[u + 1], triangles[u + 2]) = (triangles[u + 2], triangles[u + 1]);
-                return;
+                if (face.sqrMagnitude <= bestArea) continue;
+                bestArea = face.sqrMagnitude;
+                bestDot = Vector3.Dot(face, normals[triangles[t]] + normals[triangles[t + 1]] + normals[triangles[t + 2]]);
             }
+            if (bestDot >= 0f) return;
+            for (int u = first; u < triangles.Count; u += 3)
+                (triangles[u + 1], triangles[u + 2]) = (triangles[u + 2], triangles[u + 1]);
         }
     }
 }

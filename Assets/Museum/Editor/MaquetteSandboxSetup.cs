@@ -332,6 +332,9 @@ namespace VirtualMuseum.AppEditor
             serializedCrank.FindProperty("knob").objectReferenceValue = knob;
             serializedCrank.FindProperty("dispenser").objectReferenceValue = dispenser;
             serializedCrank.ApplyModifiedPropertiesWithoutUndo();
+
+            var (neonTube, neonGlow) = GachaCrankHintSetup.GetOrCreateMaterials();
+            GachaCrankHintSetup.AddTo(turn, dispenser, neonTube, neonGlow);
         }
 
         static Bounds GetCombinedBounds(Renderer[] renderers)

@@ -34,6 +34,9 @@ namespace VirtualMuseum.App
         /// <summary>Degrees turned toward the next capsule (0 to <see cref="degreesPerCapsule"/>).</summary>
         public float Progress => progress;
 
+        /// <summary>Someone holds the knob right now.</summary>
+        public bool IsTurning => turningInteractor != null;
+
         void Awake()
         {
             interactable = GetComponent<XRSimpleInteractable>();

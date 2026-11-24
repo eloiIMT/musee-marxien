@@ -573,6 +573,69 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &354426339
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 354426340}
+  - component: {fileID: 354426341}
+  m_Layer: 0
+  m_Name: Crank Hint Arrows
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &354426340
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 354426339}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 540390034}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &354426341
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 354426339}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1bc69ff3272340d4a89b404da2287835, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.GachaCrankHint
+  crank: {fileID: 540390035}
+  dispenser: {fileID: 1544434350}
+  tubeMaterial: {fileID: 2100000, guid: 53ce95f5af92f9341ab82c3019b876de, type: 2}
+  glowMaterial: {fileID: 2100000, guid: dc05f3a7d8aefc04e80997544c5d0f99, type: 2}
+  planeForward: 0.07
+  angles:
+  - 40
+  - 140
+  - 230
+  tipDistance: 0.18
+  ringInnerRadius: 0.125
+  ringOuterRadius: 0.155
+  ringStartAngle: -80
+  ringSweep: 255
+  pokeDistance: 0.015
+  pokeSpeed: 4
+  pulseSpeed: 3
+  ringSpeed: 40
+  ringSwing: 30
 --- !u!1001 &441087506
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -665,7 +728,8 @@ Transform:
   m_LocalPosition: {x: -1.323959, y: 4.877003, z: -1.9171578}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 354426340}
   m_Father: {fileID: 1544434349}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &540390035

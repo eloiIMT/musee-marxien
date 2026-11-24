@@ -104,7 +104,7 @@ namespace VirtualMuseum.App.Tests
                     {
                         int a = triangles[t], b = triangles[t + 1], c = triangles[t + 2];
                         var face = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]);
-                        if (face.sqrMagnitude < 1e-12f) continue;
+                        if (face.sqrMagnitude < 1e-18f) continue;
                         Assert.That(Vector3.Dot(face, normals[a] + normals[b] + normals[c]), Is.GreaterThan(0f), $"submesh {sub}, triangle {t / 3}");
                     }
                 }
@@ -113,6 +113,59 @@ namespace VirtualMuseum.App.Tests
             {
                 Object.DestroyImmediate(mesh);
             }
+        }
+
+        [Test]
+        public void NeonArrowOutlinePointsUpWithItsTipAtTheOrigin()
+        {
+            var mesh = NeonOutlineMesh.Build(NeonOutlineMesh.StraightArrow(0.1f, 0.04f, 0.03f, 0.01f), 0.003f, 0.006f, "test");
+            try
+            {
+                Assert.That(mesh.bounds.max.y, Is.InRange(-0.01f, 0.003f));
+                Assert.That(mesh.bounds.min.y, Is.EqualTo(-0.103f).Within(0.002f));
+                AssertFacesTowardNormals(mesh);
+            }
+            finally
+            {
+                Object.DestroyImmediate(mesh);
+            }
+        }
+
+        [Test]
+        public void NeonCircularArrowStaysOnItsRing()
+        {
+            var shape = NeonOutlineMesh.CircularArrow(0.12f, 0.15f, -80f, 255f, 22f, 0.014f);
+            foreach (var p in shape) Assert.That(p.magnitude, Is.InRange(0.12f - 0.015f, 0.15f + 0.015f));
+            var mesh = NeonOutlineMesh.Build(shape, 0.003f, 0.006f, "test");
+            try
+            {
+                AssertFacesTowardNormals(mesh);
+            }
+            finally
+            {
+                Object.DestroyImmediate(mesh);
+            }
+        }
+
+        /// <summary>
+        /// A swept tube folds over itself on the inside of bends tighter than its radius (arrow tip): those few
+        /// hidden faces point inward. Everything else must face its normals.
+        /// </summary>
+        static void AssertFacesTowardNormals(Mesh mesh)
+        {
+            var vertices = mesh.vertices;
+            var normals = mesh.normals;
+            var triangles = mesh.triangles;
+            int faces = 0, inverted = 0;
+            for (int t = 0; t < triangles.Length; t += 3)
+            {
+                int a = triangles[t], b = triangles[t + 1], c = triangles[t + 2];
+                var face = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]);
+                if (face.sqrMagnitude < 1e-18f) continue;
+                faces++;
+                if (Vector3.Dot(face, normals[a] + normals[b] + normals[c]) <= 0f) inverted++;
+            }
+            Assert.That(inverted, Is.LessThan(faces * 0.03f), $"{inverted} of {faces} faces turned inward");
         }
 
         [Test]
