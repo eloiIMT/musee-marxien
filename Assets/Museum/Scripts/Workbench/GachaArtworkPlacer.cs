@@ -8,7 +8,8 @@ namespace VirtualMuseum.App
     /// Opened gacha capsule holding an artwork miniature that is not in the museum yet (spec 2.6).
     /// While held in front of the plan board, a ghost shows where it would land (green / red); releasing it there adds
     /// the artwork to the room under it (<see cref="MuseumApi.AddArtwork"/>) and saves the museum. Released in the blue
-    /// bin, it is stored there (<see cref="ArtworkBin"/>); anywhere else, the capsule simply drops and can be grabbed
+    /// bin, or on the plan outside every room, it is stored there (<see cref="ArtworkBin"/>); anywhere else, the capsule
+    /// simply drops and can be grabbed
     /// again. Also drives the miniatures taken from the bin (<see cref="TakeFromBin"/>), which go back to it when not
     /// placed.
     ///  - any room of the plan, the room then gets selected so the new artwork shows in 3D
@@ -148,12 +149,18 @@ namespace VirtualMuseum.App
             if (roomId == null)
             {
                 reason = "Relâchez dans une salle";
-                ShowGhost(point, 0f, false, reason, p);
+                maquette.SetDropTarget(null);
                 maquette.ShowReservedZone(null);
+                if (ArtworkBin.Active == null) { ShowGhost(point, 0f, false, reason, p); return true; }
+                // On the plan but outside every room: released there, it goes to the bin (a bin miniature goes back).
+                maquette.Ghost.Show(point, 0f, GhostSize, GhostSize, true, $"Relâcher : ranger « {definition.title} » dans le bac",
+                                    p, colorOverride: Maquette.HeldColor);
+                ghostShown = true;
                 return true;
             }
 
             targetRoom = museum.rooms.Find(r => r.id == roomId);
+            maquette.SetDropTarget(roomId); // the room it goes to shows in 3D
             local = MuseumSpatial.ToRoom(targetRoom, point);
             local.y = ArtworkHeight;
             if (!MuseumGeometry.SnapToWall(targetRoom.width, targetRoom.length, ref local, out localYaw))
@@ -185,9 +192,10 @@ namespace VirtualMuseum.App
         void HideGhost()
         {
             if (maquette != null) maquette.ShowReservedZone(null);
-            if (!ghostShown) return;
+            if (!ghostShown) return; // only the placer that showed the preview clears it (others call this every frame)
             ghostShown = false;
             if (maquette != null) maquette.Ghost.Hide();
+            if (maquette != null) maquette.SetDropTarget(null);
         }
 
         void OnReleased(SelectExitEventArgs args)
@@ -195,6 +203,16 @@ namespace VirtualMuseum.App
             if (definition == null) return;
             bool aimed = !args.isCanceled && Preview();
             HideGhost();
+            if (aimed && targetRoom == null && ArtworkBin.Active != null)
+            {
+                // Outside every room: into the bin. A bin miniature simply goes back to its place (ArtworkBin.Update).
+                if (bin == null && ArtworkBin.Active.Store(definition))
+                {
+                    definition = null;
+                    Destroy(gameObject);
+                }
+                return;
+            }
             if (aimed && (targetRoom == null || reason != null))
                 maquette.Toast((reason ?? "Placement refusé") + " : œuvre non placée", true);
             if (!aimed || targetRoom == null || reason != null)

@@ -232,9 +232,10 @@ namespace VirtualMuseum.AppEditor
         const string GachaKnobName = "Top_Circle_Low";
         const float GachaCapsuleDiameter = 0.1f;
         // Machine-local points (every machine is built by CreateGachaMachine, so they hold for every copy), measured
-        // on the FBX for a 0.1 m capsule: inside the chute behind the round opening on the right, and in the cup below.
+        // on the FBX for a 0.1 m capsule: inside the chute behind the round opening on the right, and in the cup below
+        // (cup point: closest spot where the capsule rests on the cup floor without entering the machine's mesh colliders).
         static readonly Vector3 GachaChutePoint = new Vector3(1.37f, 1.72f, -0.45f);
-        static readonly Vector3 GachaCupPoint = new Vector3(1.37f, 1.34f, -1.62f);
+        static readonly Vector3 GachaCupPoint = new Vector3(1.3875f, 1.4712f, -1.585f);
 
         [MenuItem("Tools/Virtual Museum/Upgrade Gacha Machines to Crank")]
         public static void UpgradeGachaMachinesToCrank()
@@ -499,7 +500,6 @@ namespace VirtualMuseum.AppEditor
 
             var tutoSpot = Spot("Spot_Tuto");
             Place(bench.transform.Find("Tutorial Board"), tutoSpot);
-            Place(bench.transform.Find("Tutorial Text"), tutoSpot, new Vector3(0f, 0f, -0.006f));
 
             // Reserve of unused artworks: the ArtworkBin sits on the bin's bottom (Spot_Bac), lights up its mesh.
             var binSpot = Spot("Spot_Bac");
@@ -635,75 +635,43 @@ namespace VirtualMuseum.AppEditor
             r.enabled = false;
         }
 
-        const string TutorialText =
-            "MAQUETTE — COMMANDES\n" +
-            "\n" +
-            "Rayon : pointer · Gâchette (seul bouton) : cliquer et saisir\n" +
-            "Salle sélectionnée, rayon sur le plan : joystick droit ← → = Déplacer / Redimensionner / Liaison\n" +
-            "\n" +
-            "Salles\n" +
-            "  Gâchette sur une salle : sélectionner (passe en 3D)\n" +
-            "  Gâchette sur le plan vide : désélectionner la salle\n" +
-            "  Rien de sélectionné, rayon sur le plan vide : squelette 6 × 6 m, gâchette : créer\n" +
-            "  Déplacer · gâchette sur le sol (ou sphère bleue) : bouger · poignet : 15°\n" +
-            "  Redimensionner · gâchette cubes jaunes (coins) : largeur / longueur\n" +
-            "  Redimensionner · slider sur le mur du bas : hauteur (glisser, ou gâchette sur la piste)\n" +
-            "  Cube rouge, 2 clics : supprimer la salle\n" +
-            "\n" +
-            "Connexions\n" +
-            "  Liaison · gâchette sur une autre salle : relier (vert)\n" +
-            "  Liaison · gâchette sur une salle déjà reliée : délier\n" +
-            "\n" +
-            "Œuvres (salle sélectionnée, mode Déplacer)\n" +
-            "  Gâchette sur l'œuvre : déplacer · près d'un mur : aimantée\n" +
-            "  Relâcher dans une autre salle : transférer\n" +
-            "  Relâcher avec le rayon sur le bac bleu : ranger dans la réserve\n" +
-            "\n" +
-            "Réserve (bac bleu)\n" +
-            "  Œuvre en main lâchée dans le bac : rangée · la saisir dans le bac : replacer sur le plan\n" +
-            "\n" +
-            "Vert = possible · Rouge = refusé (retour en place)";
+        /// <summary>Chalkboard picture of the plan's gestures (rendered from the "Mode d'emploi du plan" page), 2400 × 1000.</summary>
+        const string TutorialMaterialPath = MaterialsFolder + "/TutorialPlan.mat";
 
-        /// <summary>Static board listing every command, just below the plan board (spec 2.1).</summary>
+        /// <summary>Static board showing the plan's gestures as a chalk drawing, just below the plan board (spec 2.1).</summary>
         [MenuItem("Tools/Virtual Museum/Add Tutorial Board")]
         public static void AddTutorialBoard()
         {
-            if (GameObject.Find("Tutorial Board") != null)
+            var material = AssetDatabase.LoadAssetAtPath<Material>(TutorialMaterialPath);
+            if (material == null) Debug.LogWarning("Tutorial picture material missing at " + TutorialMaterialPath);
+            var board = GameObject.Find("Tutorial Board");
+            if (board != null)
             {
-                // Already there: refresh its text (the commands changed).
-                var existing = GameObject.Find("Tutorial Text")?.GetComponent<TextMesh>();
-                if (existing != null && existing.text != TutorialText)
+                // Already there: show the picture (older sandboxes had a text board).
+                var r = board.GetComponent<Renderer>();
+                if (material != null && r.sharedMaterial != material)
                 {
-                    Undo.RecordObject(existing, "Add Tutorial Board");
-                    existing.text = TutorialText;
-                    EditorSceneManager.MarkSceneDirty(existing.gameObject.scene);
+                    Undo.RecordObject(r, "Add Tutorial Board");
+                    r.sharedMaterial = material;
+                    EditorSceneManager.MarkSceneDirty(board.scene);
                 }
+                var oldText = GameObject.Find("Tutorial Text");
+                if (oldText != null) Undo.DestroyObjectImmediate(oldText);
                 return;
             }
             var bench = GameObject.Find("Workbench");
-            var board = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            board = GameObject.CreatePrimitive(PrimitiveType.Cube);
             board.name = "Tutorial Board";
             UnityEngine.Object.DestroyImmediate(board.GetComponent<Collider>()); // must not catch the ray aimed at the plan
             if (bench != null) board.transform.SetParent(bench.transform, false);
             else board.transform.position = BenchPosition;
             board.transform.localPosition = new Vector3(0f, BoardCenterY - BoardSize.y / 2f - 0.3f, 0f);
-            board.transform.localScale = new Vector3(1.2f, 0.5f, 0.01f);
-            board.GetComponent<Renderer>().sharedMaterial = GetOrCreateMaterial("Board", new Color(0.12f, 0.14f, 0.16f), false);
-
-            var text = new GameObject("Text").AddComponent<TextMesh>();
-            text.transform.SetParent(board.transform.parent, false);
-            text.transform.localPosition = board.transform.localPosition + new Vector3(0f, 0f, -0.006f);
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.GetComponent<MeshRenderer>().sharedMaterial = text.font.material;
-            text.fontSize = 48;
-            text.characterSize = 0.0042f;
-            text.anchor = TextAnchor.MiddleCenter;
-            text.alignment = TextAlignment.Left;
-            text.color = Color.white;
-            text.text = TutorialText;
-            text.gameObject.name = "Tutorial Text";
+            board.transform.localScale = new Vector3(1.2f, 0.5f, 0.01f); // same 2.4 : 1 ratio as the picture
+            // The material flips the texture (tiling -1, -1): the cube's front face (-Z) has its UVs turned 180°.
+            board.GetComponent<Renderer>().sharedMaterial = material != null
+                ? material
+                : GetOrCreateMaterial("Board", new Color(0.12f, 0.14f, 0.16f), false);
             Undo.RegisterCreatedObjectUndo(board, "Add Tutorial Board");
-            Undo.RegisterCreatedObjectUndo(text.gameObject, "Add Tutorial Board");
             EditorSceneManager.MarkSceneDirty(board.scene);
         }
 

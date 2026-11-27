@@ -114,6 +114,13 @@ namespace VirtualMuseum.App
             return interactor != null;
         }
 
+        /// <summary>The interactor of <paramref name="hand"/> if this is that hand's hovered target.</summary>
+        public bool TryGetHoveringInteractor(InteractorHandedness hand, out IXRInteractor interactor)
+        {
+            interactor = null;
+            return hoverStart.ContainsKey(hand) && hovering.TryGetValue(hand, out interactor);
+        }
+
         /// <summary>Most recently hovered Clickable for a hand (the one under its ray), or null.</summary>
         public static Clickable HoveredBy(InteractorHandedness hand, out IXRInteractor interactor)
         {

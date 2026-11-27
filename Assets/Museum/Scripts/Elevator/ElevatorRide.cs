@@ -238,12 +238,29 @@ namespace VirtualMuseum.App
         {
             float total = Mathf.Max(0.01f, leg1 + leg2);
             float duration = Mathf.Max(3f, 1.5f * total / speed); // smoothstep: peak speed = 1.5 x average
+            float nextPulse = 0f;
             for (float t = 0; t < duration; t += Time.deltaTime)
             {
                 step(total * ElevatorGeometry.Ease(t / duration));
+                if (t >= nextPulse) { Rumble(t / duration); nextPulse = t + RumblePeriod; }
                 yield return null;
             }
             step(total);
+        }
+
+        const float RumblePeriod = 0.05f;
+
+        /// <summary>
+        /// Both controllers tremble during the ride: a light shaking that grows with the platform's speed
+        /// (4x(1-x) = smoothstep speed, normalized), with some noise so it feels mechanical.
+        /// </summary>
+        static void Rumble(float x)
+        {
+            float speedFactor = 4f * x * (1f - x);
+            float noise = Mathf.PerlinNoise(Time.time * 9f, 0.3f);
+            float amplitude = Mathf.Clamp01(0.08f + 0.3f * speedFactor * (0.6f + 0.8f * noise));
+            UnityEngine.XR.Interaction.Toolkit.Inputs.Haptics.HapticsUtility.SendHapticImpulse(
+                amplitude, RumblePeriod * 1.5f, UnityEngine.XR.Interaction.Toolkit.Inputs.Haptics.HapticsUtility.Controller.Both);
         }
 
         float HeadHeight()

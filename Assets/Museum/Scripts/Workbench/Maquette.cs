@@ -49,6 +49,8 @@ namespace VirtualMuseum.App
 
         public string SelectedRoomId { get; private set; }
         public string HoveredRoomId { get; private set; }
+        /// <summary>Room under an object being dragged (artwork): shown in 3D so the user sees where it lands.</summary>
+        public string DropTargetRoomId { get; private set; }
         /// <summary>Raised when the selected room changes.</summary>
         public event Action SelectionChanged;
 
@@ -63,6 +65,10 @@ namespace VirtualMuseum.App
         float toastUntil;
         readonly HashSet<RoomView> wiredRooms = new();
         readonly HashSet<GameObject> wiredArtworks = new();
+        // Hover: the room whose floor is the ray's target, or whose artwork is. An expanded room's artworks take the ray
+        // from its floor: without this the room would collapse, hide them, get the ray back and expand again, in a loop.
+        string floorHoveredRoomId;
+        static readonly List<UnityEngine.XR.Interaction.Toolkit.Interactables.IXRInteractable> validTargets = new();
 
         void Awake()
         {
@@ -94,6 +100,8 @@ namespace VirtualMuseum.App
                 creator.Init(c);
                 c.Clicked += (_, interactor) =>
                 {
+                    // Left hand: no click on the empty plan (no room creation, no deselection).
+                    if (interactor == null || interactor.handedness != UnityEngine.XR.Interaction.Toolkit.Interactors.InteractorHandedness.Right) return;
                     if (SelectedRoomId != null) ClearSelection();
                     else creator.Click(interactor);
                 };
@@ -126,6 +134,7 @@ namespace VirtualMuseum.App
         {
             if (toast != null && toast.gameObject.activeSelf && Time.time > toastUntil) toast.gameObject.SetActive(false);
             UpdateModeSelectorVisibility();
+            UpdateHover();
         }
 
         void OnDisable()
@@ -191,9 +200,9 @@ namespace VirtualMuseum.App
                 c.Clicked += (_, _) => OnRoomClicked(id);
                 c.HoverChanged += hovered =>
                 {
-                    if (hovered) HoveredRoomId = id;
-                    else if (HoveredRoomId == id) HoveredRoomId = null;
-                    UpdateVisuals();
+                    if (hovered) floorHoveredRoomId = id;
+                    else if (floorHoveredRoomId == id) floorHoveredRoomId = null;
+                    UpdateHover();
                 };
                 // Trigger on the floor = grab and move the room directly, no prior selection needed.
                 var move = rv.Floor.AddComponent<MoveHandle>();
@@ -205,6 +214,7 @@ namespace VirtualMuseum.App
             wiredArtworks.RemoveWhere(a => a == null);
             foreach (var rv in View.Rooms.Values)
             {
+                rv.EnablePlanMarkers(handleMaterial); // flat 2D artwork footprints while the room is collapsed
                 foreach (var pair in rv.Artworks)
                 {
                     var go = pair.Value;
@@ -226,6 +236,9 @@ namespace VirtualMuseum.App
                 if (marker != null) marker.Apply(rv.Data, data, handleMaterial);
             }
 
+            if (floorHoveredRoomId != null && View.GetRoomView(floorHoveredRoomId) == null) floorHoveredRoomId = null;
+            if (HoveredRoomId != null && View.GetRoomView(HoveredRoomId) == null) HoveredRoomId = null;
+            if (DropTargetRoomId != null && View.GetRoomView(DropTargetRoomId) == null) DropTargetRoomId = null;
             if (SelectedRoomId != null && View.GetRoomView(SelectedRoomId) == null) SelectRoom(null);
             ApplyModeToHandles();
             UpdateVisuals();
@@ -326,12 +339,35 @@ namespace VirtualMuseum.App
         float nextInteractorSearch;
 
         /// <summary>
-        /// Does a hand's ray (as drawn by XRI) cross the plan board (10 cm margin)? True only in a scene without any
-        /// hand ray interactor; false while the controllers are not tracked (their interactors are inactive).
+        /// Does the RIGHT hand's ray (as drawn by XRI) cross the plan board? Only that hand works on the plan, and the
+        /// selector lives on its stick: as soon as its ray leaves the board the selector goes and the stick turns again.
+        /// True only in a scene without any hand ray interactor; false while the controller is not tracked.
         /// </summary>
         bool IsRayOnBoard()
         {
             if (board == null) return true;
+            var interactors = RayInteractors();
+            if (interactors == null || interactors.Length == 0) return true;
+
+            var bt = board.transform;
+            var plane = new Plane(bt.forward, bt.position);
+            foreach (var i in interactors)
+            {
+                if (i == null || !i.isActiveAndEnabled
+                    || i.handedness != UnityEngine.XR.Interaction.Toolkit.Interactors.InteractorHandedness.Right) continue;
+                var origin = ((UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals.ICurveInteractionDataProvider)i).curveOrigin;
+                if (origin == null) origin = i.transform;
+                var ray = new Ray(origin.position, origin.forward);
+                if (!plane.Raycast(ray, out float d)) continue;
+                var p = bt.InverseTransformPoint(ray.GetPoint(d)); // unit cube space
+                if (Mathf.Abs(p.x) <= 0.5f && Mathf.Abs(p.y) <= 0.5f) return true;
+            }
+            return false;
+        }
+
+        /// <summary>The hands' ray interactors (not the gaze); searched again every 2 s while some are missing.</summary>
+        UnityEngine.XR.Interaction.Toolkit.Interactors.XRBaseInteractor[] RayInteractors()
+        {
             // Inactive ones included: the controllers' objects are disabled until tracked, so a search made at start
             // would find nothing and never search again.
             if ((rayInteractors == null || rayInteractors.Length == 0 || Array.Exists(rayInteractors, i => i == null))
@@ -343,22 +379,49 @@ namespace VirtualMuseum.App
                          && i.handedness != UnityEngine.XR.Interaction.Toolkit.Interactors.InteractorHandedness.None); // not the gaze
                 nextInteractorSearch = Time.unscaledTime + 2f;
             }
-            if (rayInteractors == null || rayInteractors.Length == 0) return true;
+            return rayInteractors;
+        }
 
-            var bt = board.transform;
-            var plane = new Plane(bt.forward, bt.position);
-            float mx = 0.5f + 0.1f / Mathf.Max(bt.lossyScale.x, 1e-3f), my = 0.5f + 0.1f / Mathf.Max(bt.lossyScale.y, 1e-3f);
-            foreach (var i in rayInteractors)
+        // ---------------------------------------------------------------- hover
+
+        /// <summary>
+        /// Hovered room = the one whose floor is a hand's target, else the one owning the artwork a hand's ray targets.
+        /// Called from the floors' hover events and every frame.
+        /// </summary>
+        void UpdateHover()
+        {
+            var id = floorHoveredRoomId ?? ArtworkTargetRoom();
+            if (id == HoveredRoomId) return;
+            HoveredRoomId = id;
+            UpdateVisuals();
+        }
+
+        string ArtworkTargetRoom()
+        {
+            var interactors = RayInteractors();
+            if (interactors == null) return null;
+            foreach (var i in interactors)
             {
                 if (i == null || !i.isActiveAndEnabled) continue;
-                var origin = ((UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals.ICurveInteractionDataProvider)i).curveOrigin;
-                if (origin == null) origin = i.transform;
-                var ray = new Ray(origin.position, origin.forward);
-                if (!plane.Raycast(ray, out float d)) continue;
-                var p = bt.InverseTransformPoint(ray.GetPoint(d)); // unit cube space
-                if (Mathf.Abs(p.x) <= mx && Mathf.Abs(p.y) <= my) return true;
+                validTargets.Clear();
+                i.GetValidTargets(validTargets); // XRI sorts them, closest first
+                // Only expanded rooms' artworks are active, hence targetable.
+                if (validTargets.Count == 0 || validTargets[0] is not Component c || c.GetComponent<ArtworkHandle>() == null) continue;
+                var rv = c.GetComponentInParent<RoomView>();
+                if (rv != null && View.GetRoomView(rv.RoomId) == rv) return rv.RoomId;
             }
-            return false;
+            return null;
+        }
+
+        /// <summary>
+        /// Room an object being dragged would land in, shown in 3D while aimed at; null when the drag ends or leaves the
+        /// rooms. One drag at a time.
+        /// </summary>
+        public void SetDropTarget(string roomId)
+        {
+            if (roomId == DropTargetRoomId) return;
+            DropTargetRoomId = roomId;
+            UpdateVisuals();
         }
 
         void UpdateVisuals()
@@ -370,7 +433,8 @@ namespace VirtualMuseum.App
                 var id = rv.RoomId;
                 bool selected = id == SelectedRoomId;
                 bool hovered = id == HoveredRoomId;
-                rv.Expanded = selected || hovered;
+                bool dropTarget = id == DropTargetRoomId;
+                rv.Expanded = selected || hovered || dropTarget;
                 Color? tint = null;
                 // Blue floor = "grab it to move it": only in the Move mode (the floor is not grabbable otherwise).
                 if (selected) tint = Mode == EditMode.Move ? selectedColor : null;
@@ -381,7 +445,7 @@ namespace VirtualMuseum.App
                     if (hovered) tint = linked ? unlinkHoverColor : Color.Lerp(hoverColor, linkedColor, 0.5f);
                     else if (linked) tint = linkedColor;
                 }
-                else if (hovered) tint = hoverColor;
+                else if (hovered || dropTarget) tint = hoverColor;
                 rv.SetFloorTint(tint);
             }
             // The selected room's connection lines stand out.

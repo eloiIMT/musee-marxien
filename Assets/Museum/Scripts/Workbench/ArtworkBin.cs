@@ -11,7 +11,8 @@ namespace VirtualMuseum.App
     ///    leaves the museum (and its tours)
     ///  - out: grab a miniature in the bin and release it over a room of the plan, as with a gacha capsule
     ///    (<see cref="GachaArtworkPlacer"/>); released anywhere else it goes back to its place in the bin
-    /// The contents are saved in their own file (<see cref="ArtworkBinStore"/>). Lives at Spot_Bac under the Workbench
+    /// The contents are written to their own file (<see cref="ArtworkBinStore"/>) but not reloaded: the bin starts empty
+    /// every session. Lives at Spot_Bac under the Workbench
     /// (hidden in visitor mode): origin on the bin's bottom, front (-Z) towards the user. No collider: the bin must not
     /// stop the XRI rays aimed at the miniatures inside it, aiming is tested against <see cref="AimBox"/>.
     /// </summary>
@@ -64,12 +65,10 @@ namespace VirtualMuseum.App
         {
             backend = FindAnyObjectByType<MuseumBackend>();
             if (backend == null) { Debug.LogError("The artwork bin needs a MuseumBackend.", this); return; }
-            store = ArtworkBinStore.Load(ArtworkBinStore.DefaultPath, id => backend.Catalog.Find(id) != null, out var error);
-            if (error != null) Debug.LogWarning("Artwork bin: " + error, this);
+            // Starts empty every session, like the museum (GachaDispenser): the previous save is not reloaded.
             label = Labels.Create(transform, "", 0.03f, Color.white);
             label.transform.localPosition = new Vector3(0f, 0.42f, 0f);
             ready = true;
-            foreach (var entry in store.Items) Spawn(entry);
             RefreshLabel();
         }
 

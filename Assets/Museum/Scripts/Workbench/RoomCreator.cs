@@ -6,17 +6,20 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 namespace VirtualMuseum.App
 {
     /// <summary>
-    /// Room creation straight on the plan, no button: while nothing is selected and a hand's ray points at an empty
-    /// part of the plan board, a 6 × 6 m skeleton (the ghost) follows the ray end on the 0.5 m grid, green when the
-    /// room fits, red otherwise. Clicking the skeleton (the click button, on the empty plan) creates the room there
-    /// and selects it. With something selected, a small green "+" shows where a room would fit instead, and a click on
-    /// the empty plan only deselects (see <see cref="Maquette"/>).
+    /// Room creation straight on the plan, no button: while nothing is selected and the right hand's ray points at an empty
+    /// part of the plan board, a square skeleton (the ghost) follows the ray end on the 0.5 m grid: the largest room
+    /// that fits there, 6 × 6 m down to 3 × 3 m, green; red when none fits. Clicking the skeleton (the click button, on
+    /// the empty plan) creates the room there and selects it. With something selected, a small "+" follows the ray on
+    /// the empty plan instead (green where a room fits, red otherwise), and a click on the empty plan only deselects
+    /// (see <see cref="Maquette"/>).
     /// Added by <see cref="Maquette"/> on itself.
     /// </summary>
     [RequireComponent(typeof(Maquette))]
     public class RoomCreator : MonoBehaviour
     {
-        const float DefaultSize = 6f;
+        const float DefaultSize = 6f, MinSize = 3f;
+        static readonly Color FitColor = new Color(0.2f, 1f, 0.4f), NoFitColor = new Color(1f, 0.25f, 0.2f);
+        float size;
 
         Maquette maquette;
         Clickable board;
@@ -59,20 +62,29 @@ namespace VirtualMuseum.App
             if (!onPlan) reason = "Visez le plan";
             target = MuseumGeometry.SnapXZ(p);
             if (reason == null && !maquette.IsOverBoard(maquette.MuseumToWorld(target))) reason = "Hors du plan";
-            if (reason == null && MuseumGeometry.OverlapsAny(museum, null, target, 0f, DefaultSize, DefaultSize))
-                reason = "Trop proche d'une autre salle (1 m min.)";
+            // Largest square room that fits here, 6 m down to 3 m: the plan is fitted tightly around the museum, so a
+            // 6 × 6 m room alone would fit almost nowhere.
+            size = 0f;
+            if (reason == null)
+            {
+                for (float s = DefaultSize; s >= MinSize - 1e-3f; s -= 0.5f)
+                    if (!MuseumGeometry.OverlapsAny(museum, null, target, 0f, s, s)) { size = s; break; }
+                if (size == 0f) reason = "Trop proche d'une autre salle (1 m min.)";
+            }
             valid = reason == null;
 
             if (maquette.SelectedRoomId != null)
             {
-                // A room is selected: no full skeleton (it would hide the selection), only a small green "+" where a
-                // room fits. The click on the empty plan still deselects; the skeleton then shows.
+                // A room is selected: no full skeleton (it would hide the selection), only a small "+" following the
+                // ray on the empty plan, green where a room fits, red otherwise. The click on the empty plan still
+                // deselects; the skeleton then shows.
                 HideSkeleton();
-                if (valid && onPlan) ShowMarker(p); else HideMarker();
+                if (onPlan) ShowMarker(p, valid); else HideMarker();
                 return;
             }
             HideMarker();
-            maquette.Ghost.Show(target, 0f, DefaultSize, DefaultSize, valid, reason ?? "Gâchette : créer une salle 6 × 6 m");
+            float shown = valid ? size : DefaultSize;
+            maquette.Ghost.Show(target, 0f, shown, shown, valid, reason ?? $"Gâchette : créer une salle {size:0.#} × {size:0.#} m");
             showing = true;
         }
 
@@ -82,7 +94,7 @@ namespace VirtualMuseum.App
         static Material markerMaterial;
         Transform marker;
 
-        void ShowMarker(Vector3 museumPoint)
+        void ShowMarker(Vector3 museumPoint, bool fits)
         {
             if (marker == null)
             {
@@ -95,6 +107,7 @@ namespace VirtualMuseum.App
                 marker.SetParent(transform, false);
             }
             marker.gameObject.SetActive(true);
+            Tint.Set(marker.GetComponent<Renderer>(), fits ? FitColor : NoFitColor);
             // Flat on the plan (quad normal -Z turned to museum up = towards the user), slightly above the floors.
             marker.SetLocalPositionAndRotation(new Vector3(museumPoint.x, 0.4f, museumPoint.z), Quaternion.Euler(90f, 0f, 0f));
             marker.localScale = Vector3.one * (MarkerWorldSize / Mathf.Max(maquette.Scale, 1e-5f));
@@ -109,7 +122,7 @@ namespace VirtualMuseum.App
         {
             if (markerMaterial != null) return markerMaterial;
             const int size = 64;
-            var green = new Color(0.2f, 1f, 0.4f, 1f);
+            var ink = Color.white; // tinted green / red per frame (Tint)
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, name = "CreateRoomMarker" };
             var pixels = new Color[size * size];
             for (int y = 0; y < size; y++)
@@ -118,7 +131,7 @@ namespace VirtualMuseum.App
                 float u = (x + 0.5f) / size - 0.5f, v = (y + 0.5f) / size - 0.5f;
                 bool border = Mathf.Max(Mathf.Abs(u), Mathf.Abs(v)) is > 0.40f and < 0.48f;
                 bool plus = (Mathf.Abs(u) < 0.05f && Mathf.Abs(v) < 0.28f) || (Mathf.Abs(v) < 0.05f && Mathf.Abs(u) < 0.28f);
-                pixels[y * size + x] = border || plus ? green : Color.clear;
+                pixels[y * size + x] = border || plus ? ink : Color.clear;
             }
             tex.SetPixels(pixels);
             tex.Apply(true, true);
@@ -136,11 +149,11 @@ namespace VirtualMuseum.App
             return markerMaterial;
         }
 
-        /// <summary>Ray of the hand pointing at the empty plan, or null (the ray is elsewhere).</summary>
+        /// <summary>Ray of the RIGHT hand pointing at the empty plan, or null (elsewhere; the left hand creates nothing).</summary>
         Ray? PointingRay()
         {
             if (board == null || !board.IsHovered) return null;
-            if (!board.TryGetHoveringInteractor(out var interactor)) return null;
+            if (!board.TryGetHoveringInteractor(InteractorHandedness.Right, out var interactor)) return null;
             var origin = interactor is ICurveInteractionDataProvider curve && curve.curveOrigin != null ? curve.curveOrigin : interactor.transform;
             return new Ray(origin.position, origin.forward);
         }
@@ -162,7 +175,7 @@ namespace VirtualMuseum.App
             try
             {
                 var name = MuseumGeometry.NextRoomName(museum);
-                var room = maquette.Api.CreateRoom(name, target);
+                var room = maquette.Api.CreateRoom(name, target, size, size);
                 HideSkeleton();
                 maquette.SelectRoom(room.id);
                 maquette.Toast($"« {name} » créée");

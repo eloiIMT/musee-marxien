@@ -27,6 +27,12 @@ namespace VirtualMuseum.App
         float wallThickness, lowWallHeight, labelHeight;
         bool expanded = true;
         readonly Dictionary<string, GameObject> artworks = new();
+        // Plan (2D) view: flat footprint of each artwork on the floor, shown while the room is collapsed.
+        static readonly Color MarkerColor = new Color(1f, 0.72f, 0.2f);
+        const float MarkerMinSize = 0.3f, MarkerThickness = 0.04f;
+        Transform markersRoot;
+        Material markerMaterial;
+        readonly Dictionary<string, Transform> markers = new();
         readonly HashSet<string> warnings = new();
 
         /// <summary>Full-height walls with artworks visible (true) or low plan walls without artworks (false).</summary>
@@ -38,6 +44,7 @@ namespace VirtualMuseum.App
                 if (expanded == value) return;
                 expanded = value;
                 artworksRoot.gameObject.SetActive(value);
+                if (markersRoot != null) markersRoot.gameObject.SetActive(!value);
                 Layout();
             }
         }
@@ -95,7 +102,82 @@ namespace VirtualMuseum.App
                 if (artworks[id] != null) Destroy(artworks[id]);
                 artworks.Remove(id);
             }
+            SyncMarkers();
             ApplyWarnings();
+        }
+
+        /// <summary>
+        /// Organizer plan: while collapsed, draw each artwork as a flat footprint on the floor (top view of its meshes).
+        /// Off by default (immersive museum).
+        /// </summary>
+        public void EnablePlanMarkers(Material material)
+        {
+            if (markersRoot != null || material == null) return;
+            markerMaterial = material;
+            markersRoot = new GameObject("Artwork Markers (plan)").transform;
+            markersRoot.SetParent(transform, false);
+            markersRoot.gameObject.SetActive(!expanded);
+            SyncMarkers();
+            ApplyWarnings();
+        }
+
+        void SyncMarkers()
+        {
+            if (markersRoot == null) return;
+            foreach (var pair in artworks)
+            {
+                if (pair.Value == null) continue;
+                if (!markers.TryGetValue(pair.Key, out var marker) || marker == null)
+                {
+                    var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    go.name = "Marker";
+                    Destroy(go.GetComponent<Collider>()); // never takes the ray from the floor
+                    var r = go.GetComponent<Renderer>();
+                    r.sharedMaterial = markerMaterial;
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    marker = go.transform;
+                    marker.SetParent(markersRoot, false);
+                    markers[pair.Key] = marker;
+                }
+                marker.name = "Marker · " + pair.Value.name;
+                PlaceMarker(marker, pair.Value.transform);
+            }
+            foreach (var id in new List<string>(markers.Keys))
+            {
+                if (artworks.ContainsKey(id)) continue;
+                if (markers[id] != null) Destroy(markers[id].gameObject);
+                markers.Remove(id);
+            }
+        }
+
+        /// <summary>Footprint of the artwork's meshes, in its own frame (works while hidden), laid flat on the floor.</summary>
+        static void PlaceMarker(Transform marker, Transform art)
+        {
+            var toArt = art.worldToLocalMatrix;
+            bool any = false;
+            var bounds = new Bounds();
+            foreach (var mf in art.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf.sharedMesh == null) continue;
+                var m = toArt * mf.transform.localToWorldMatrix;
+                var b = mf.sharedMesh.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var corner = m.MultiplyPoint3x4(b.center + Vector3.Scale(b.extents,
+                        new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1)));
+                    if (!any) { bounds = new Bounds(corner, Vector3.zero); any = true; }
+                    else bounds.Encapsulate(corner);
+                }
+            }
+            var scale = art.localScale;
+            var size = Vector3.Scale(bounds.size, scale);
+            var centre = art.localPosition + art.localRotation * Vector3.Scale(bounds.center, scale);
+            float yaw = MuseumGeometry.Yaw(art.localRotation);
+            marker.SetLocalPositionAndRotation(new Vector3(centre.x, MarkerThickness / 2f + 0.005f, centre.z),
+                                               Quaternion.Euler(0f, yaw, 0f));
+            // Footprint measured in the artwork's frame: its yaw only (artworks stand upright).
+            marker.localScale = new Vector3(Mathf.Max(Mathf.Abs(size.x), MarkerMinSize), MarkerThickness,
+                                            Mathf.Max(Mathf.Abs(size.z), MarkerMinSize));
         }
 
         /// <summary>
@@ -166,6 +248,8 @@ namespace VirtualMuseum.App
                     : ShowWarnings && Data != null && !MuseumGeometry.IsInside(Data.width, Data.length, pair.Value.transform.localPosition);
                 foreach (var r in pair.Value.GetComponentsInChildren<Renderer>())
                     if (warn) Tint.Set(r, WarningColor); else Tint.Clear(r);
+                if (markers.TryGetValue(pair.Key, out var marker) && marker != null)
+                    Tint.Set(marker.GetComponent<Renderer>(), warn ? WarningColor : MarkerColor);
             }
         }
 

@@ -6,8 +6,8 @@ namespace VirtualMuseum.App
     /// <summary>
     /// Wall plan of the room the visitor is in ("you are here" map). One instance, moved to the current room's wall
     /// on each room change, so every room has its plan. It shows the SAME miniature as the organizer's board
-    /// (a <see cref="MuseumView"/> on the same data), which links the two representations, but turned
-    /// "forward-up": the direction the user faces when looking at the plan is up on the plan (no mental rotation).
+    /// (a <see cref="MuseumView"/> on the same data), which links the two representations, laid out the same way:
+    /// north-up, same scale and centre in every room, so the plan never changes from one room to the next.
     ///  - red arrow = user position and heading, blue room = here;
     ///  - green rooms = connected: TRIGGER on one = go there (short fade, arrival facing the room we come from);
     ///    grey rooms = not connected (refused);
@@ -133,35 +133,30 @@ namespace VirtualMuseum.App
             UpdateVisuals();
         }
 
-        /// <summary>Scale and turn the miniature so the whole museum fits on the board, "forward-up".</summary>
+        /// <summary>
+        /// Scale and centre the miniature so the whole museum fits on the board, always north-up: the same plan in every
+        /// room (rooms never move on it from one room to the next), like the organizer's board.
+        /// </summary>
         void Fit()
         {
             var data = Guide.Data;
-            var room = Guide.GetRoom(roomId);
-            if (data == null || room == null || data.rooms.Count == 0) return;
-
-            // Museum direction the user faces when looking at the plan = outward normal of the wall.
-            var (_, normal, _) = ChooseWall(room, data);
-            float theta = Mathf.Atan2(normal.x, normal.z) * Mathf.Rad2Deg;
-            var unturn = Quaternion.Euler(0, -theta, 0);
+            if (data == null || data.rooms.Count == 0) return;
 
             bool any = false;
             Vector2 min = default, max = default;
             foreach (var r in data.rooms)
                 foreach (var c in MuseumGeometry.Corners(r.position, MuseumGeometry.Yaw(r.rotation), r.width, r.length))
                 {
-                    var p = unturn * new Vector3(c.x, 0, c.y);
-                    var q = new Vector2(p.x, p.z);
-                    if (!any) { min = max = q; any = true; }
-                    else { min = Vector2.Min(min, q); max = Vector2.Max(max, q); }
+                    if (!any) { min = max = c; any = true; }
+                    else { min = Vector2.Min(min, c); max = Vector2.Max(max, c); }
                 }
             var size = max - min;
             scale = Mathf.Clamp(Mathf.Min((BoardWidth - 0.1f) / Mathf.Max(size.x, 0.1f), (BoardHeight - 0.1f) / Mathf.Max(size.y, 0.1f)), 0.004f, 0.08f);
-            var centreTurned = (min + max) / 2f;
-            var centreMuseum = Quaternion.Euler(0, theta, 0) * new Vector3(centreTurned.x, 0, centreTurned.y);
+            var centre = (min + max) / 2f;
+            var centreMuseum = new Vector3(centre.x, 0, centre.y);
 
-            // Museum up (Y) -> towards the user (-Z of the plan); the faced museum direction -> plan up.
-            var localRot = Quaternion.LookRotation(Vector3.up, Vector3.back) * Quaternion.Euler(0, -theta, 0);
+            // Museum up (Y) -> towards the user (-Z of the plan); museum north (+Z) -> plan up.
+            var localRot = Quaternion.LookRotation(Vector3.up, Vector3.back);
             var t = miniature.transform;
             t.localScale = Vector3.one * scale;
             t.localRotation = localRot;

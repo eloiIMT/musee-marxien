@@ -1,5 +1,4 @@
 using System.Collections;
-using System.IO;
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
@@ -47,14 +46,7 @@ namespace VirtualMuseum.App
                 Debug.LogError("Gacha dispenser requires a MuseumBackend to register artwork.", this);
                 return;
             }
-
-            var savePath = MuseumPersistence.DefaultPath;
-            if (File.Exists(savePath) && !backend.Load(out var error))
-            {
-                Debug.LogError("Could not load the saved museum before using the Gacha dispenser: " + error, this);
-                return;
-            }
-
+            // No load of the previous save: every session starts from the example museum (placed artworks do not stay).
             museumReady = true;
         }
 

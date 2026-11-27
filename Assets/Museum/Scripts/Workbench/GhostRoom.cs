@@ -47,10 +47,12 @@ namespace VirtualMuseum.App
         /// <param name="text">Label (dimensions, reason); null = none.</param>
         /// <param name="hand">World hand position to link with a line; null = no line.</param>
         /// <param name="colorOverride">Neutral colour (e.g. the object held in the hand) instead of green / red.</param>
+        /// <param name="outline">False: label (and hand line) only, no outline.</param>
         public void Show(Vector3 center, float yaw, float width, float length, bool valid, string text = null,
-                         Vector3? hand = null, float height = 0.5f, Color? colorOverride = null)
+                         Vector3? hand = null, float height = 0.5f, Color? colorOverride = null, bool outline = true)
         {
             gameObject.SetActive(true);
+            foreach (var b in bars) b.gameObject.SetActive(outline);
             transform.SetLocalPositionAndRotation(center, Quaternion.Euler(0f, yaw, 0f));
             float hw = width / 2f, hl = length / 2f, t = BarThickness;
             Set(bars[0], new Vector3(0, height, hl), new Vector3(width + t, t, t));
