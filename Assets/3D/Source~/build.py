@@ -98,6 +98,9 @@ for o in list(scene.objects):
     if o.name in ('group850969638', 'group466027787'):                    rm(o, 'headphones + cord on the workbench'); continue
     # contents of the open drawer (screwdriver sticking out, two small parts): the drawer is closed below
     if o.name in ('group816388643', 'group1132960755', 'group1293440205'): rm(o, 'open drawer contents'); continue
+    # the model's own west wall panels (full-height slab + low wainscot, at other depths than the rebuilt walls): the west
+    # wall is rebuilt like the east one (plain wall, base trim, stripe, pilasters)
+    if o.name in ('group1100343911', 'group1807314114'):                  rm(o, 'model west wall panels (rebuilt)'); continue
     # workbench top, centre: room for the gacha machine
     if -0.45 < c.x < 0.72 and 0.38 < c.y < 0.95 and a.z > -0.14 and b.z < 0.32 and o.name != 'group850969638':
         rm(o, 'workbench top (gacha spot)'); continue
@@ -217,26 +220,23 @@ for i, x in enumerate(np.arange(XE - 0.1, XW + 0.3, T)):
 new.append(box('Ceiling', XE - 0.3, XW + 0.4, H, H + 0.1, ZN - 0.3, 1.6, 'mat17'))
 new.append(box('Wall_East', XE - 0.2, XE, 0, H, ZN - 0.2, 1.6, 'mat16'))
 new.append(box('Wall_North', XE - 0.2, XW + 0.4, 0, H, ZN - 0.2, ZN, 'mat16'))
-new.append(box('Wall_West_Corner', XW, XW + 0.4, 0, H, 0.38, 1.6, 'mat16'))       # hides the moved machinery run's start
-new.append(box('Wall_West_Upper', XW + 0.05, XW + 0.4, 1.85, H, ZN, 1.6, 'mat16'))
-# below 1.85 the west wall is the model's own panels (moved with the machinery run): they stop short of the pushed-back
-# north wall, so the corner is closed with a full-height piece, and a backing seals any other gap from outside
-west_panels = [o for o in scene.objects if o.type == 'MESH' and clusters.get(o.name) == 'west' and -bbox(o)[1].x > XW - 0.1]
-z_panels = min(-bbox(o)[1].y for o in west_panels)
-new.append(box('Wall_West_NorthCorner', XW, XW + 0.4, 0, H, ZN - 0.2, z_panels + 0.02, 'mat16'))
-new.append(box('Wall_West_Backing', XW + 0.22, XW + 0.4, 0, H, ZN - 0.2, 1.6, 'mat16'))
+# west wall: same plain wall as the east one (thicker outwards so the backs of the machinery run stay inside it)
+new.append(box('Wall_West', XW, XW + 0.4, 0, H, ZN - 0.2, 1.6, 'mat16'))
 new.append(box('Wall_South_Upper', XE, XW + 0.4, 1.74, H, 1.2, 1.45, 'mat16'))
 new.append(box('Wall_South', XE - 0.2, XW + 0.4, 0, H, 1.44, 1.6, 'mat16'))           # seen beside the bookshelf
-new.append(box('Trim_East_Base', XE, XE + 0.03, 0, 0.12, ZN, 0.75, 'mat17'))
+# side walls get the same base trim, stripe and pilasters (mirrored), the north wall its own run
+for n_, sx, xw in (('East', 1, XE), ('West', -1, XW)):
+    def side(name, d, y0, y1, z0, z1, mat):          # box from the wall face d metres into the room
+        new.append(box(name, *sorted((xw, xw + sx * d)), y0, y1, z0, z1, mat))
+    side(f'Trim_{n_}_Base', 0.03, 0, 0.12, ZN, 0.75, 'mat17')
+    side(f'Trim_{n_}_Stripe', 0.015, 1.05, 1.1, ZN, 0.7, 'mat13')
+    for i, z in enumerate(np.linspace(0.7, ZN + 0.1, 4)):
+        side(f'Pilaster_{n_}_{i}', 0.06, 0, H, z - 0.06, z + 0.06, 'mat17')
+    side(f'Cornice_{n_}', 0.08, H - 0.12, H, ZN, 1.45, 'mat17')
 new.append(box('Trim_North_Base', XE, XW, 0, 0.12, ZN, ZN + 0.03, 'mat17'))
-new.append(box('Trim_East_Stripe', XE, XE + 0.015, 1.05, 1.1, ZN, 0.7, 'mat13'))
 new.append(box('Trim_North_Stripe', XE, XW, 1.05, 1.1, ZN, ZN + 0.015, 'mat13'))
-for i, z in enumerate(np.linspace(0.7, ZN + 0.1, 4)):
-    new.append(box(f'Pilaster_East_{i}', XE, XE + 0.06, 0, H, z - 0.06, z + 0.06, 'mat17'))
 for i, x in enumerate(np.linspace(XE + 0.1, XW - 0.1, 5)):
     new.append(box(f'Pilaster_North_{i}', x - 0.06, x + 0.06, 0, H, ZN, ZN + 0.06, 'mat17'))
-for n_, a in (('East', (XE, XE + 0.08, ZN, 1.45)), ('West', (XW - 0.03, XW + 0.05, ZN, 1.45))):
-    new.append(box(f'Cornice_{n_}', a[0], a[1], H - 0.12, H, a[2], a[3], 'mat17'))
 new.append(box('Cornice_North', XE, XW, H - 0.12, H, ZN, ZN + 0.08, 'mat17'))
 new.append(box('Cornice_South', XE, XW, H - 0.12, H, 1.12, 1.2, 'mat17'))
 for i, z in enumerate(np.linspace(0.45, ZN + 0.65, 4)):
@@ -307,23 +307,9 @@ for side in (-1, 1):
 easel.append(obox('Easel_Clamp', bp(0, BOARD_H / 2 + 0.03, 0.01), XB, UPB, FWB, 0.16, 0.09, 0.09, 'Atelier_BoisChevalet'))
 easel.append(obox('Easel_Clamp_Lip', bp(0, BOARD_H / 2 - 0.005, -BOARD_T / 2 - 0.012), XB, UPB, FWB, 0.12, 0.03, 0.015, 'Atelier_BoisChevalet'))
 
-# button shelf on the right of the easel (New room / Visitor view), turned towards the user
-YAW_BTN = math.radians(40)
-bx_ = Vector((math.cos(YAW_BTN), 0, -math.sin(YAW_BTN)))     # panel local x
-bz_ = Vector((math.sin(YAW_BTN), 0, math.cos(YAW_BTN)))      # panel local +Z (back); front normal = -bz_
-PANEL_C = Vector((1.27, 1.0, -0.14))
-# Free-standing (a stand of its own, like the lectern): an arm from the easel leg would have to cross the plan sheet.
-buttons = []
-buttons.append(obox('Buttons_Panel', PANEL_C, bx_, (0, 1, 0), bz_, 0.3, 0.62, 0.03, 'Atelier_BoisChevalet'))
-buttons.append(obox('Buttons_Panel_Plate', PANEL_C - bz_ * 0.017, bx_, (0, 1, 0), bz_, 0.24, 0.54, 0.005, 'mat17'))
-post_xz = PANEL_C + bz_ * 0.045
-buttons.append(beam('Buttons_Post', Vector((post_xz.x, 0.03, post_xz.z)), Vector((post_xz.x, PANEL_C.y + 0.15, post_xz.z)),
-                    0.06, 0.06, bz_, 'Atelier_BoisChevalet'))
-buttons.append(obox('Buttons_Foot', Vector((post_xz.x, 0.02, post_xz.z)), bx_, (0, 1, 0), bz_, 0.34, 0.04, 0.3, 'mat17'))
-
-# tutorial lectern on the left, facing the user, top tilted for reading
-LEC = Vector((-1.45, 0, -0.45))
-YAW_LEC = math.radians(-60)         # object yaw: its front (-Z) points at the user
+# tutorial lectern on the right of the easel (where the old, empty button shelf stood), facing the user, top tilted
+LEC = Vector((1.45, 0, -0.45))
+YAW_LEC = math.radians(60)          # object yaw: its front (-Z) points at the user
 TILT_LEC = math.radians(25)
 ly = Vector((0, 1, 0))
 lx = Vector((math.cos(YAW_LEC), 0, -math.sin(YAW_LEC)))
@@ -336,6 +322,103 @@ lectern.append(obox('Lectern_Top', TOP_C, lx, top_up, top_back, 1.32, 0.62, 0.03
 lectern.append(obox('Lectern_Top_Lip', TOP_C - top_up * 0.32 - top_back * 0.02, lx, top_up, top_back, 1.32, 0.04, 0.06, 'Atelier_BoisChevalet'))
 lectern.append(beam('Lectern_Post', LEC + Vector((0, 0.03, 0)), TOP_C + top_back * 0.03 - top_up * 0.05, 0.08, 0.08, lz, 'Atelier_BoisChevalet'))
 lectern.append(obox('Lectern_Foot', LEC + Vector((0, 0.02, 0)), lx, ly, lz, 0.6, 0.04, 0.42, 'mat17'))
+
+# ---------------------------------------------------------------- 4b. storage table + blue bin (unused artworks)
+# Between the gacha machine and the plan, against nothing: a small copy of the workbench (its own top, leg frames and
+# drawer meshes, resized per axis) with a blue stacking bin (hopper front) on it, both turned towards the user.
+def ubox(o):                     # Unity-space bbox of a mesh (object transforms are identity at this point)
+    vs = [(-v.co.x, v.co.z, -v.co.y) for v in o.data.vertices]
+    return [min(v[i] for v in vs) for i in range(3)], [max(v[i] for v in vs) for i in range(3)]
+
+def yaw_axes(yaw):               # Unity object yaw -> world directions of its local x and z
+    return Vector((math.cos(yaw), 0, -math.sin(yaw))), Vector((math.sin(yaw), 0, math.cos(yaw)))
+
+def clone_into(src_name, name, dst_lo, dst_hi, origin, yaw):
+    """Copy of an existing mesh, its Unity bbox remapped per axis onto [dst_lo, dst_hi] (object-local, None = keep the
+    source range), turned by yaw and moved to origin. Per-axis scaling only: no mirroring, normals stay outwards."""
+    src = scene.objects[src_name]
+    lo, hi = ubox(src)
+    dst_lo = [lo[i] if dst_lo[i] is None else dst_lo[i] for i in range(3)]
+    dst_hi = [hi[i] if dst_hi[i] is None else dst_hi[i] for i in range(3)]
+    ax, az = yaw_axes(yaw)
+    me = src.data.copy(); me.name = name
+    o = bpy.data.objects.new(name, me); scene.collection.objects.link(o)
+    for v in me.vertices:
+        u = (-v.co.x, v.co.z, -v.co.y)
+        p = [dst_lo[i] + (u[i] - lo[i]) * (dst_hi[i] - dst_lo[i]) / (hi[i] - lo[i]) for i in range(3)]
+        v.co = U(*(origin + ax * p[0] + Vector((0, p[1], 0)) + az * p[2]))
+    me.update()
+    return o
+
+# The workbench's front (towards the room) is +Z in its source meshes, so the table keeps +Z as its front: yaw 90 turns
+# it towards the user (+X). Width (local x) runs along the east wall, between the gacha (z < -1.56) and the easel.
+TABLE_C = Vector((-1.7, 0, -0.85))
+TABLE_YAW = math.radians(90)
+TW, TD = 1.1, 0.6                # top width (local x), depth (local z): the bin is 0.95 m wide with its rim
+SRC_TOP, SRC_LEG, SRC_DRAWER = 'group975002159', 'group1184716703', 'group1527169260'   # workbench top, leg frame, drawer
+table = [clone_into(SRC_TOP, 'Table_Top', (-TW / 2, None, -TD / 2), (TW / 2, None, TD / 2), TABLE_C, TABLE_YAW)]
+LEG = 0.06                       # square legs, one per corner (the workbench's leg frame squeezed to a post)
+for sx, nx in ((-1, 'L'), (1, 'R')):
+    for sz, nz in ((-1, 'B'), (1, 'F')):
+        xa, xb = sorted((sx * (TW / 2 - 0.04), sx * (TW / 2 - 0.04 - LEG)))
+        za, zb = sorted((sz * (TD / 2 - 0.04), sz * (TD / 2 - 0.04 - LEG)))
+        table.append(clone_into(SRC_LEG, f'Table_Leg_{nx}{nz}', (xa, None, za), (xb, None, zb), TABLE_C, TABLE_YAW))
+table.append(clone_into(SRC_DRAWER, 'Table_Drawer', (-0.31, None, TD / 2 - 0.38), (0.31, None, TD / 2 - 0.02), TABLE_C, TABLE_YAW))
+TABLE_TOP_Y = ubox(scene.objects[SRC_TOP])[1][1]
+
+# blue plastic stacking bin (hopper front, rolled rim, ribs, label holder): local front = -Z, like the Unity objects
+blue = bpy.data.materials.new('Atelier_BacBleu'); blue.use_nodes = True
+blue_d = bpy.data.materials.new('Atelier_BacBleuFonce'); blue_d.use_nodes = True
+for m_, col in ((blue, (0.03, 0.115, 0.61, 1)), (blue_d, (0.01, 0.03, 0.19, 1))):
+    m_.diffuse_color = col
+    m_.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value = col
+    m_.node_tree.nodes['Principled BSDF'].inputs['Roughness'].default_value = 0.45
+    MAT[m_.name] = m_
+
+BIN_YAW = math.radians(-90)      # front (-Z) towards the user (+X)
+BIN_O = Vector((TABLE_C.x, TABLE_TOP_Y, TABLE_C.z))
+bx, bz = yaw_axes(BIN_YAW)
+up = Vector((0, 1, 0))
+def L(x, y, z): return BIN_O + bx * x + up * y + bz * z
+BW, BD, BH, BT = 0.92, 0.4, 0.24, 0.012      # width, depth, height, wall thickness (ArtworkBin.cs mirrors these)
+HF, SL = 0.11, 0.17                          # front panel height, slope run of the side walls
+bac = []
+def bbox_l(name, x0, x1, y0, y1, z0, z1, mat):
+    bac.append(obox(name, L((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), bx, up, bz, x1 - x0, y1 - y0, z1 - z0, mat))
+def prism(name, pts_zy, xa, xb, mat):
+    n = len(pts_zy)
+    verts = [tuple(L(xa, y, z)) for z, y in pts_zy] + [tuple(L(xb, y, z)) for z, y in pts_zy]
+    faces = [tuple(range(n)), tuple(range(2 * n - 1, n - 1, -1))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
+    o = mesh_obj(name, verts, faces, mat)
+    bm = bmesh.new(); bm.from_mesh(o.data); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(o.data); bm.free()
+    bac.append(o)
+
+side_profile = [(-BD / 2 + 0.03, 0), (-BD / 2, HF), (-BD / 2 + SL, BH), (BD / 2, BH), (BD / 2, 0)]
+bbox_l('Bac_Fond', -BW / 2, BW / 2, 0, BT, -BD / 2 + 0.03, BD / 2, 'Atelier_BacBleu')
+bbox_l('Bac_Dos', -BW / 2, BW / 2, 0, BH, BD / 2 - BT, BD / 2, 'Atelier_BacBleu')
+for sx, nm in ((-1, 'G'), (1, 'D')):
+    xa, xb = sorted((sx * BW / 2, sx * (BW / 2 - BT)))
+    prism(f'Bac_Flanc_{nm}', side_profile, xa, xb, 'Atelier_BacBleu')
+    p0, p1 = L(sx * (BW / 2 + 0.004), HF, -BD / 2), L(sx * (BW / 2 + 0.004), BH, -BD / 2 + SL)
+    bac.append(beam(f'Bac_Rebord_Pente_{nm}', p0, p1, 0.01, 0.024, bx, 'Atelier_BacBleu'))
+    xa, xb = sorted((sx * (BW / 2 - BT), sx * (BW / 2 + 0.016)))
+    bbox_l(f'Bac_Rebord_{nm}', xa, xb, BH - 0.01, BH, -BD / 2 + SL, BD / 2 + 0.016, 'Atelier_BacBleu')
+    for k_, zc in enumerate((-0.03, 0.11)):                      # outer ribs on the full-height part of the side
+        xa, xb = sorted((sx * BW / 2, sx * (BW / 2 + 0.012)))
+        bbox_l(f'Bac_Nervure_{nm}{k_}', xa, xb, 0.015, BH - 0.01, zc - 0.015, zc + 0.015, 'Atelier_BacBleu')
+bbox_l('Bac_Rebord_Dos', -BW / 2 - 0.016, BW / 2 + 0.016, BH - 0.01, BH, BD / 2 - BT, BD / 2 + 0.02, 'Atelier_BacBleu')
+for k_, xc in enumerate((-BW / 6, BW / 6)):                        # inner ribs on the back wall
+    bbox_l(f'Bac_Nervure_Dos{k_}', xc - 0.015, xc + 0.015, BT, BH - 0.01, BD / 2 - BT - 0.01, BD / 2 - BT, 'Atelier_BacBleu')
+# low front panel, slightly slanted (bottom set back), with a lip on top and the label holder on its face
+f0, f1 = L(0, 0, -BD / 2 + 0.03 + BT / 2), L(0, HF, -BD / 2 + BT / 2)
+bac.append(beam('Bac_Face', f0, f1, BW, BT, bz, 'Atelier_BacBleu'))
+bbox_l('Bac_Levre', -BW / 2 - 0.008, BW / 2 + 0.008, HF - 0.01, HF, -BD / 2 - 0.03, -BD / 2 + BT, 'Atelier_BacBleu')
+fa = (f1 - f0).normalized()
+fn = fa.cross(bx).normalized()
+if fn.dot(-bz) < 0: fn = -fn                                         # outwards = towards the front
+mid = (f0 + f1) / 2
+bac.append(obox('Bac_Etiquette_Cadre', mid + fn * (BT / 2 + 0.002), bx, fa, fn, 0.2, 0.07, 0.004, 'Atelier_BacBleuFonce'))
+bac.append(obox('Bac_Etiquette', mid + fn * (BT / 2 + 0.0045), bx, fa, fn, 0.17, 0.045, 0.002, 'mat21'))
 
 # ---------------------------------------------------------------- 5. spots
 A = Matrix(((-1, 0, 0), (0, 0, 1), (0, -1, 0)))          # Unity = A @ Blender
@@ -355,16 +438,13 @@ def spot(name, pos_u, obj_euler=None, spot_euler=None):
     e.empty_display_type = 'ARROWS'; e.empty_display_size = 0.3
     return e
 
-btn_front = PANEL_C - bz_ * 0.04
 lec_front = TOP_C - top_back * 0.025
 spots = [
     spot('Spot_Plan', tuple(BOARD_C), obj_euler=(15, 0, 0)),
-    spot('Spot_Tuto', tuple(lec_front), obj_euler=(25, -60, 0)),
-    spot('Spot_BoutonNouvelleSalle', tuple(btn_front + Vector((0, 0.14, 0))), obj_euler=(0, 40, 0)),
-    spot('Spot_VueVisiteur', tuple(btn_front + Vector((0, -0.14, 0))), obj_euler=(0, 40, 0)),
+    spot('Spot_Tuto', tuple(lec_front), obj_euler=(25, math.degrees(YAW_LEC), 0)),
     spot('Spot_PC', (1.62 + GROW_W, 1.27, -0.56), obj_euler=(0, 90, 0)),   # where the removed desk's screen was, on the machinery wall
     spot('Spot_Gacha', (0.24, 0.9, -2.31 - GROW_N), obj_euler=(0, 180, 0)),
-    spot('Spot_Bac', (-0.85, 0, -1.35), obj_euler=(0, -90, 0)),
+    spot('Spot_Bac', tuple(BIN_O), obj_euler=(0, math.degrees(BIN_YAW), 0)),   # bin bottom centre, on the storage table
     spot('Spot_Ascenseur', (ELEV_X, 0, ELEV_Z), spot_euler=(0, 0, 0)),          # platform centre (floor level)
     spot('Spot_Levier', (LEVER_X, LEVER_Y, ELEV_Z), obj_euler=(0, 90, 0)),      # on the cabinet, front towards the platform (-X)
     spot('Spot_Joueur', (0, 0, PLAYER_Z), spot_euler=(0, 0, 0)),
@@ -457,12 +537,13 @@ if FBX:
         bpy.ops.object.join()
         j = bpy.context.view_layer.objects.active; j.name = name; j.data.name = name
         return j
-    keep_apart = set(easel) | set(lectern) | set(buttons)
+    keep_apart = set(easel) | set(lectern) | set(table) | set(bac)
     decor = [o for o in scene.objects if o.type == 'MESH' and o not in keep_apart]
     join(decor, 'Atelier_Decor')
     join(easel, 'Chevalet')
     join(lectern, 'Pupitre_Tuto')
-    join(buttons, 'Pupitre_Boutons')
+    join(table, 'Table_Bac')
+    join(bac, 'Bac_Oeuvres')
     names = {'mat16': 'Atelier_Ardoise', 'mat17': 'Atelier_Noir', 'mat18': 'Atelier_Bois', 'mat13': 'Atelier_Orange',
              'mat15': 'Atelier_Metal', 'mat21': 'Atelier_Blanc', 'mat12': 'Atelier_Jaune', 'mat24': 'Atelier_Verre',
              'mat22': 'Atelier_Gris', 'mat23': 'Atelier_NoirProfond', 'mat20': 'Atelier_Brun', 'mat19': 'Atelier_Cuivre'}

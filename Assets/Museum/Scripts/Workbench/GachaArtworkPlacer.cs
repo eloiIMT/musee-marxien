@@ -7,8 +7,10 @@ namespace VirtualMuseum.App
     /// <summary>
     /// Opened gacha capsule holding an artwork miniature that is not in the museum yet (spec 2.6).
     /// While held in front of the plan board, a ghost shows where it would land (green / red); releasing it there adds
-    /// the artwork to the room under it (<see cref="MuseumApi.AddArtwork"/>) and saves the museum. Released anywhere
-    /// else, the capsule simply drops and can be grabbed again.
+    /// the artwork to the room under it (<see cref="MuseumApi.AddArtwork"/>) and saves the museum. Released in the blue
+    /// bin, it is stored there (<see cref="ArtworkBin"/>); anywhere else, the capsule simply drops and can be grabbed
+    /// again. Also drives the miniatures taken from the bin (<see cref="TakeFromBin"/>), which go back to it when not
+    /// placed.
     ///  - any room of the plan, the room then gets selected so the new artwork shows in 3D
     ///  - turning the wrist rotates it by 15°; within 0.5 m of a wall it snaps to the wall, facing into the room
     ///  - closer than 0.8 m to another artwork = red, release keeps the capsule in the hand's world
@@ -28,6 +30,8 @@ namespace VirtualMuseum.App
         Transform visual;
         Bounds visualBounds;
         bool ghostShown;
+        ArtworkBin bin;          // set for a miniature taken from the bin
+        string binEntryId;
 
         // Last preview
         Room targetRoom;
@@ -39,6 +43,18 @@ namespace VirtualMuseum.App
 
         /// <summary>False while the artwork is still shut in the capsule (see <see cref="Open"/>).</summary>
         public bool Opened { get; private set; }
+
+        public bool IsHeld => grab != null && grab.isSelected;
+
+        /// <summary>World size of the artwork miniature (zero without one).</summary>
+        public Vector3 VisualWorldSize => visual == null ? Vector3.zero : visualBounds.size * visual.lossyScale.x;
+
+        /// <summary>This miniature is the bin's entry <paramref name="entryId"/>: it leaves the bin once placed.</summary>
+        public void TakeFromBin(ArtworkBin owner, string entryId)
+        {
+            bin = owner;
+            binEntryId = entryId;
+        }
 
         /// <param name="artworkVisual">Artwork miniature, child of the capsule, at scale 1 with no offset.</param>
         public void Init(ArtworkDefinition artwork, MuseumBackend museumBackend, Transform artworkVisual = null)
@@ -179,22 +195,33 @@ namespace VirtualMuseum.App
             if (definition == null) return;
             bool aimed = !args.isCanceled && Preview();
             HideGhost();
-            if (!aimed) return; // not over the plan: the capsule just drops
-            if (targetRoom == null || reason != null)
-            {
+            if (aimed && (targetRoom == null || reason != null))
                 maquette.Toast((reason ?? "Placement refusé") + " : œuvre non placée", true);
+            if (!aimed || targetRoom == null || reason != null)
+            {
+                // Not placed. A bin miniature goes back to its place (ArtworkBin.Update); a capsule let go in the bin
+                // is stored there; anywhere else the capsule just drops.
+                var target = ArtworkBin.Active;
+                if (bin == null && !args.isCanceled && target != null && target.Contains(transform.position)
+                    && target.Store(definition))
+                {
+                    definition = null;
+                    Destroy(gameObject);
+                }
                 return;
             }
 
             var api = maquette.Api;
             var artwork = api.AddArtwork(definition.id, targetRoom.id, local);
             api.SetArtworkTransform(artwork.id, local, Quaternion.Euler(0f, localYaw, 0f), artwork.localScale);
+            if (bin != null) bin.ApplyStoredTexts(binEntryId, artwork.id); // title / description edited before storing
             if (!backend.Save(out var error))
             {
                 api.RemoveArtwork(artwork.id);
                 maquette.Toast("Œuvre non sauvegardée : " + error, true);
                 return;
             }
+            if (bin != null) bin.Remove(binEntryId);
 
             maquette.SelectRoom(targetRoom.id); // show the room in 3D so the new artwork is visible and editable
             maquette.Toast($"« {definition.title} » placée dans « {targetRoom.name} »");

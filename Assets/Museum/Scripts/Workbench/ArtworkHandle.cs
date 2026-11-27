@@ -9,6 +9,7 @@ namespace VirtualMuseum.App
     ///  - turning the wrist like a knob rotates it by 15°; within 0.5 m of a wall it snaps to the wall, facing into the room
     ///  - closer than 0.8 m to another artwork = red, release puts it back
     ///  - released over another room = <see cref="MuseumApi.TransferArtwork"/>
+    ///  - released while the ray points at the blue bin = leaves the museum for the reserve (<see cref="ArtworkBin"/>)
     /// </summary>
     public class ArtworkHandle : DragHandle
     {
@@ -24,6 +25,7 @@ namespace VirtualMuseum.App
         float localYaw, yawOffset;
         Vector3 grabOffset;
         bool valid;
+        bool toBin;
         string reason;
 
         protected override void BeginDrag()
@@ -46,6 +48,16 @@ namespace VirtualMuseum.App
         protected override void Drag(Vector3 handPosition, Quaternion handRotation)
         {
             if (art == null) return;
+            var bin = ArtworkBin.Active;
+            toBin = bin != null && bin.IsAimedBy(new Ray(RayTransform.position, RayTransform.forward));
+            if (bin != null) bin.ShowHint(toBin ? $"Relâcher : ranger « {art.title} »" : null);
+            if (toBin)
+            {
+                Maquette.Ghost.Hide();
+                Maquette.ShowReservedZone(null);
+                return;
+            }
+
             var p = Pointer() + grabOffset; // follows the ray's point on the plan, not the hand
             var roomId = MuseumGeometry.RoomAt(museum, p);
             targetRoom = roomId != null ? museum.rooms.Find(r => r.id == roomId) : null;
@@ -81,8 +93,14 @@ namespace VirtualMuseum.App
 
         protected override void EndDrag()
         {
+            bool store = toBin;
             Cleanup();
             if (art == null) return;
+            if (store)
+            {
+                ArtworkBin.Active?.StoreFromMuseum(art.id);
+                return;
+            }
             if (targetRoom == null || !valid) { Maquette.Toast((reason ?? "Placement refusé") + " : œuvre remise en place", true); return; }
             var api = Maquette.Api;
             var rotation = Quaternion.Euler(0f, localYaw, 0f);
@@ -106,6 +124,8 @@ namespace VirtualMuseum.App
         {
             Maquette.Ghost.Hide();
             Maquette.ShowReservedZone(null);
+            toBin = false;
+            if (ArtworkBin.Active != null) ArtworkBin.Active.ShowHint(null);
         }
 
         float HandYaw(Quaternion handRotation) => Maquette.HandTwist(handRotation);

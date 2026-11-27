@@ -400,7 +400,8 @@ namespace VirtualMuseum.AppEditor
 
         /// <summary>
         /// Closed workshop room around the plan (Assets/3D/Atelier.fbx, built from workshop.glb by Assets/3D/Source~/build.py):
-        /// room, wooden easel holding the plan, button shelf, tutorial lectern. Child of the Workbench so it is hidden in
+        /// room, wooden easel holding the plan, tutorial lectern on its right, storage table with the blue bin for unused
+        /// artworks (Table_Bac, Bac_Oeuvres). Child of the Workbench so it is hidden in
         /// visitor mode; its origin is the Workbench origin. Spot_* empties mark the stations (gacha, PC screen, lever,
         /// elevator, bin...); <see cref="ApplyWorkshopLayout"/> moves the existing plan, buttons, tutorial and rig onto them.
         /// Decor has no colliders (rays must reach the plan) and casts no shadows (closed ceiling).
@@ -446,7 +447,7 @@ namespace VirtualMuseum.AppEditor
 
         /// <summary>
         /// Puts the existing workshop objects on the Atelier's spots: plan board on the easel (size, tilt, blueprint paper),
-        /// buttons on the easel's shelf, tutorial on the lectern, XR rig at Spot_Joueur. Re-run after re-exporting the FBX.
+        /// tutorial on the lectern, XR rig at Spot_Joueur. Re-run after re-exporting the FBX.
         /// Spot convention: the object's front (-Z) faces the spot's +Z.
         /// </summary>
         [MenuItem("Tools/Virtual Museum/Apply Workshop Layout")]
@@ -499,7 +500,24 @@ namespace VirtualMuseum.AppEditor
             var tutoSpot = Spot("Spot_Tuto");
             Place(bench.transform.Find("Tutorial Board"), tutoSpot);
             Place(bench.transform.Find("Tutorial Text"), tutoSpot, new Vector3(0f, 0f, -0.006f));
-            // Spot_BoutonNouvelleSalle is left empty: rooms are created by clicking the empty plan.
+
+            // Reserve of unused artworks: the ArtworkBin sits on the bin's bottom (Spot_Bac), lights up its mesh.
+            var binSpot = Spot("Spot_Bac");
+            if (binSpot != null)
+            {
+                var bin = bench.transform.Find("Artwork Bin");
+                if (bin == null)
+                {
+                    bin = new GameObject("Artwork Bin").transform;
+                    bin.SetParent(bench.transform, false);
+                    bin.gameObject.AddComponent<ArtworkBin>();
+                    Undo.RegisterCreatedObjectUndo(bin.gameObject, "Apply Workshop Layout");
+                }
+                Place(bin, binSpot);
+                var so = new SerializedObject(bin.GetComponent<ArtworkBin>());
+                so.FindProperty("binRenderer").objectReferenceValue = room.Find("Bac_Oeuvres")?.GetComponent<Renderer>();
+                so.ApplyModifiedProperties();
+            }
 
             var stand = bench.transform.Find("Board Stand");
             if (stand != null && stand.gameObject.activeSelf)
@@ -639,6 +657,10 @@ namespace VirtualMuseum.AppEditor
             "Œuvres (salle sélectionnée, mode Déplacer)\n" +
             "  Gâchette sur l'œuvre : déplacer · près d'un mur : aimantée\n" +
             "  Relâcher dans une autre salle : transférer\n" +
+            "  Relâcher avec le rayon sur le bac bleu : ranger dans la réserve\n" +
+            "\n" +
+            "Réserve (bac bleu)\n" +
+            "  Œuvre en main lâchée dans le bac : rangée · la saisir dans le bac : replacer sur le plan\n" +
             "\n" +
             "Vert = possible · Rouge = refusé (retour en place)";
 
