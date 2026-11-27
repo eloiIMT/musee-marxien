@@ -105,6 +105,25 @@ namespace VirtualMuseum.App
             return turned;
         }
 
+        /// <summary>Depth in front of a door kept free of artworks (the arch, the doorway, where visitors arrive).</summary>
+        public const float DoorClearDepth = 1.5f;
+        public const string DoorReason = "Devant une porte : gardez le passage libre";
+
+        /// <summary>Is a room-local point in front of one of the room's doors (<see cref="ConnectionLayout"/>)?</summary>
+        public static bool InFrontOfDoor(Room room, Museum museum, Vector3 local)
+        {
+            foreach (var (a, b) in ConnectionLayout.Compute(museum).Values)
+                foreach (var door in new[] { a, b })
+                {
+                    if (door.RoomId != room.id) continue;
+                    var d = local - door.Local;
+                    float toWall = -Vector3.Dot(d, door.Normal);                       // > 0 inside the room
+                    float along = Vector3.Dot(d, Vector3.Cross(Vector3.up, door.Normal));
+                    if (toWall < DoorClearDepth && Mathf.Abs(along) < door.Width / 2f + ClearMargin) return true;
+                }
+            return false;
+        }
+
         public const string ReservedReason = "Devant le plan / levier : gardez la place libre";
     }
 }

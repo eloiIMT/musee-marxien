@@ -26,6 +26,8 @@ namespace VirtualMuseum.App
         public event Action StateChanged;
 
         readonly Dictionary<string, ArtworkTarget> targets = new();
+        string arrivalRoomId;
+        Vector3 arrivalPoint; // museum coordinates
 
         void Awake() => Mode = GetComponent<VisitorMode>();
 
@@ -96,7 +98,38 @@ namespace VirtualMuseum.App
             RoomChanged?.Invoke(id);
         }
 
-        /// <summary>Called by <see cref="VisitorMode"/> right after the rig was placed in a room.</summary>
-        public void OnArrived(string roomId) => SetCurrentRoom(roomId);
+        /// <summary>
+        /// Called by <see cref="VisitorMode"/> right after the rig was placed in a room by the elevator or the wall plan:
+        /// the visitor stands on the room's elevator platform.
+        /// </summary>
+        public void OnArrived(string roomId)
+        {
+            var room = GetRoom(roomId);
+            if (room == null) { SetCurrentRoom(roomId); return; }
+            var spot = MuseumStation.Compute(room, Data).spot;
+            OnArrived(roomId, MuseumSpatial.ToMuseum(room, new Vector3(spot.x, 0f, spot.y)));
+        }
+
+        /// <summary>The visitor arrived in a room at <paramref name="museumPoint"/> (e.g. in front of a door): the room's
+        /// labels turn towards them.</summary>
+        public void OnArrived(string roomId, Vector3 museumPoint)
+        {
+            arrivalRoomId = roomId;
+            arrivalPoint = museumPoint;
+            SetCurrentRoom(roomId);
+            foreach (var t in targets.Values)
+                if (t != null && GetArtwork(t.ArtworkId)?.roomId == roomId) t.Refresh();
+        }
+
+        /// <summary>
+        /// Where the visitor came into <paramref name="room"/> (room-local, floor level): the point of their last arrival
+        /// in it, else its elevator platform (where they arrive by default). Labels face it.
+        /// </summary>
+        public Vector3 ArrivalLocal(Room room)
+        {
+            if (room.id == arrivalRoomId) return MuseumSpatial.ToRoom(room, arrivalPoint);
+            var spot = MuseumStation.Compute(room, Data).spot;
+            return new Vector3(spot.x, 0f, spot.y);
+        }
     }
 }

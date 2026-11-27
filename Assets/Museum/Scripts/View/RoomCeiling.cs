@@ -9,8 +9,10 @@ namespace VirtualMuseum.App
     [Serializable]
     public class CeilingStyle
     {
-        [Tooltip("White plaster: flat ceiling, cornices and the skylight well.")]
+        [Tooltip("Cream plaster: flat ceiling, cornices and the skylight well.")]
         public Material plaster;
+        [Tooltip("Baseboard along the bottom of the walls (plaster if empty).")]
+        public Material trim;
         [Tooltip("Skylight pane model (frame + glass), lying flat, centred (Assets/3D/GlassWindow.fbx).")]
         public GameObject skylightPane;
         [Tooltip("Frosted glass of the panes (matte, luminous).")]
@@ -24,9 +26,9 @@ namespace VirtualMuseum.App
     }
 
     /// <summary>
-    /// Ceiling of one room of the life-size museum, after a classic gallery: a moulded cornice along the walls, a flat
-    /// plaster ceiling and, in the centre, a recessed skylight (moulded frame, light well, frosted panes) that spreads
-    /// soft daylight into the room. Procedural (rebuilt when the room is resized). Casts no shadow: the room's light
+    /// Ceiling and trims of one room of the life-size museum, after a classic gallery: a moulded cornice along the walls,
+    /// a flat plaster ceiling and, in the centre, a recessed skylight (moulded frame, light well, frosted panes) that
+    /// spreads soft daylight into the room; a baseboard along the bottom of the walls. Procedural (rebuilt when the room is resized). Casts no shadow: the room's light
     /// comes from <see cref="SkylightLighting"/> (sun from above + even ambient), as if through the skylight, without any
     /// extra realtime light (cheap on Quest).
     /// </summary>
@@ -35,11 +37,13 @@ namespace VirtualMuseum.App
         // Cornice along the walls, (inset from the wall, height relative to the ceiling) in metres, from the wall's
         // bottom edge inwards and up to the ceiling. Faces point to the room (see AddRing).
         static readonly Vector2[] Cornice = BuildCornice();
+        // Baseboard: a flat board with a rounded lip, from the floor up against the wall (faces into the room).
+        static readonly Vector2[] Baseboard = BuildBaseboard();
         const float MinSkylight = 1.2f;   // smallest opening worth a skylight (m)
         const float GlassInset = 0.08f;   // the well's top cove overlaps the glass by this much
 
         CeilingStyle style;
-        Mesh mesh;
+        Mesh mesh, baseboardMesh;
         Transform panesRoot;
         Vector3 builtSize = new(-1f, -1f, -1f);
         Vector3 paneSize, paneCentre;
@@ -56,6 +60,14 @@ namespace VirtualMuseum.App
             r.sharedMaterial = style.plaster;
             r.shadowCastingMode = ShadowCastingMode.Off;
 
+            baseboardMesh = new Mesh { name = "Baseboard" };
+            var bb = new GameObject("Plinthe");
+            bb.transform.SetParent(transform, false);
+            bb.AddComponent<MeshFilter>().sharedMesh = baseboardMesh;
+            var br = bb.AddComponent<MeshRenderer>();
+            br.sharedMaterial = style.trim != null ? style.trim : style.plaster;
+            br.shadowCastingMode = ShadowCastingMode.Off;
+
             panesRoot = new GameObject("Verrière").transform;
             panesRoot.SetParent(transform, false);
         }
@@ -63,6 +75,7 @@ namespace VirtualMuseum.App
         void OnDestroy()
         {
             if (mesh != null) Destroy(mesh);
+            if (baseboardMesh != null) Destroy(baseboardMesh);
         }
 
         /// <summary>Fit the ceiling to a room of inner size <paramref name="width"/> × <paramref name="length"/> (between
@@ -84,21 +97,27 @@ namespace VirtualMuseum.App
             if (skylight) foreach (var p in SkylightProfile(margin, style.wellDepth)) profile.Add(p);
             else profile.Add(new Vector2(Mathf.Min(a, b), 0f)); // closed flat ceiling
 
-            var vertices = new List<Vector3>();
-            var normals = new List<Vector3>();
-            var uvs = new List<Vector2>();
-            var triangles = new List<int>();
-            AddRing(a, b, height, profile, vertices, normals, uvs, triangles);
-            mesh.Clear();
-            mesh.SetVertices(vertices);
-            mesh.SetNormals(normals);
-            mesh.SetUVs(0, uvs);
-            mesh.SetTriangles(triangles, 0);
-            mesh.RecalculateBounds();
+            Sweep(mesh, a, b, height, profile);
+            Sweep(baseboardMesh, a, b, 0f, new List<Vector2>(Baseboard));
 
             float glassY = height + (skylight ? style.wellDepth : 0f);
             float openA = a - margin - GlassInset, openB = b - margin - GlassInset;
             BuildPanes(skylight, 2f * openA + 0.02f, 2f * openB + 0.02f, glassY);
+        }
+
+        static void Sweep(Mesh target, float a, float b, float y, List<Vector2> profile)
+        {
+            var vertices = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var triangles = new List<int>();
+            AddRing(a, b, y, profile, vertices, normals, uvs, triangles);
+            target.Clear();
+            target.SetVertices(vertices);
+            target.SetNormals(normals);
+            target.SetUVs(0, uvs);
+            target.SetTriangles(triangles, 0);
+            target.RecalculateBounds();
         }
 
         // ---------------------------------------------------------------- skylight panes
@@ -200,6 +219,20 @@ namespace VirtualMuseum.App
             p.Add(new Vector2(0.23f, -0.02f));
             p.Add(new Vector2(0.26f, -0.02f));
             p.Add(new Vector2(0.26f, 0f));
+            return p.ToArray();
+        }
+
+        /// <summary>12 cm board, 18 mm thick, its top edge rounded back to the wall.</summary>
+        static Vector2[] BuildBaseboard()
+        {
+            var p = new List<Vector2> { new(0.018f, 0f), new(0.018f, 0.092f) };
+            for (int i = 1; i <= 4; i++)
+            {
+                float t = Mathf.PI / 2f * i / 4f;
+                p.Add(new Vector2(0.008f + 0.01f * Mathf.Cos(t), 0.092f + 0.018f * Mathf.Sin(t)));
+            }
+            p.Add(new Vector2(0.008f, 0.118f));
+            p.Add(new Vector2(0f, 0.12f));
             return p.ToArray();
         }
 

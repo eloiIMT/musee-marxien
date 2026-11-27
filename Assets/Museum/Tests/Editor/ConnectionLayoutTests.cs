@@ -80,6 +80,23 @@ namespace VirtualMuseum.App.Tests
         }
 
         [Test]
+        public void RoomsSharingAWall_GetBackToBackDoors_EvenWithOtherDoorsOnThatWall()
+        {
+            // B shares A's east wall; C touches B's west wall at its far end: B's two doors must not move B's door to A
+            // off A's (they stay back to back), and both doors of each connection have the same width.
+            var a = R("A", 0, 0, 8, 6); var b = R("B", 9, 0, 10, 8); var c = R("C", 0, 8, 6, 10);
+            Link(a, b); Link(b, c); Link(a, c);
+            var layout = ConnectionLayout.Compute(M(a, b, c));
+            foreach (var (da, db) in layout.Values) Assert.AreEqual(da.Width, db.Width, 1e-4f);
+            var (ab, ba) = layout[MuseumView.ConnectionKey("A", "B")];
+            var pa = ConnectionLayout.ToMuseum(a, ab); var pb = ConnectionLayout.ToMuseum(b, ba);
+            Assert.AreEqual(pa.x, pb.x, 1e-4f);
+            Assert.AreEqual(pa.z, pb.z, 1e-4f);
+            var (bc, _) = layout[MuseumView.ConnectionKey("B", "C")];
+            Assert.GreaterOrEqual(Mathf.Abs(bc.Local.z - ba.Local.z), (bc.Width + ba.Width) / 2f);
+        }
+
+        [Test]
         public void DanglingConnection_IsIgnored()
         {
             var a = R("A", 0, 0); a.connections.Add("missing");

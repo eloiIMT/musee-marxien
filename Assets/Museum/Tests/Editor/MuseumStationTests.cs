@@ -58,5 +58,34 @@ namespace VirtualMuseum.App.Tests
             // ...unless it is the one being moved: then the west wall stays the plan wall and its spot is reserved.
             Assert.IsTrue(MuseumStation.IsReserved(room, museum, new Vector3(-2.5f, 1f, 0f), "a0"));
         }
+
+        static Museum Linked(Room room, Vector3 otherPosition)
+        {
+            var m = With(room);
+            var other = new Room { id = "o", position = otherPosition, width = 6, length = 8 };
+            room.connections.Add(other.id);
+            other.connections.Add(room.id);
+            m.rooms.Add(other);
+            return m;
+        }
+
+        [Test]
+        public void FrontOfDoor_IsBlocked_RestOfRoomIsNot()
+        {
+            var room = Room();
+            var m = Linked(room, new Vector3(10, 0, 0)); // door on the east wall (x = 3), middle of the shared span
+            Assert.IsTrue(MuseumStation.InFrontOfDoor(room, m, new Vector3(2.2f, 1, 0)));
+            Assert.IsFalse(MuseumStation.InFrontOfDoor(room, m, new Vector3(0, 1, 0)));     // far enough from the wall
+            Assert.IsFalse(MuseumStation.InFrontOfDoor(room, m, new Vector3(2.2f, 1, 3.5f))); // beside the door
+        }
+
+        [Test]
+        public void Plan_AvoidsTheWallWithADoor()
+        {
+            var room = Room();
+            var m = Linked(room, new Vector3(-10, 0, 0)); // door in the middle of the west wall, the plan's usual wall
+            var s = MuseumStation.Compute(room, m);
+            Assert.AreNotEqual(Vector3.left, s.normal);
+        }
     }
 }

@@ -10,27 +10,34 @@ namespace VirtualMuseum.AppEditor
     /// Look of the life-size museum: chevron parquet floor (Wood 0058, texturecan.com) and moulded ceilings with a
     /// frosted skylight (pane model "glass window" by Noboa, CC-BY-4.0, see Assets/3D/Source~). Makes the materials and
     /// gives them to the immersive <see cref="MuseumView"/> of the open scene. The miniatures keep their plain floor.
+    /// Also the doors at the connections: arch "Arch7" of MuseumAsset by Vira Voloshyn (viravoloshyn.itch.io).
     /// </summary>
     public static class MuseumLookSetup
     {
         const string Materials = "Assets/Museum/Materials";
         const string Wood = "Assets/Museum/Textures/WoodFloor";
         const string PanePath = "Assets/3D/GlassWindow.fbx";
+        const string DoorPath = "Assets/3D/MuseumDoor.fbx";
         const float FloorTile = 1.6f; // metres per repeat of the parquet texture (two chevron columns)
 
-        [MenuItem("Tools/Virtual Museum/Apply Museum Look (parquet + skylights)")]
+        [MenuItem("Tools/Virtual Museum/Apply Museum Look (parquet, skylights, doors)")]
         public static void Apply()
         {
             var floor = FloorMaterial();
-            var plaster = Lit("CeilingPlaster", new Color(0.94f, 0.93f, 0.9f), smoothness: 0.12f);
+            // Cream walls, ceiling and doors (the doors are part of the wall), a lighter cream baseboard.
+            var wall = Lit("MuseumWall", new Color(0.96f, 0.92f, 0.83f), smoothness: 0.1f);
+            var trim = Lit("MuseumTrim", new Color(0.98f, 0.96f, 0.9f), smoothness: 0.3f);
+            var plaster = Lit("CeilingPlaster", new Color(0.95f, 0.91f, 0.82f), smoothness: 0.12f);
             // The sun lights the ceiling from above only: a little emission stands for the daylight bounced off the
             // floor and walls, so the plaster reads white like in a real gallery.
-            plaster.SetColor("_EmissionColor", new Color(0.42f, 0.41f, 0.39f));
+            plaster.SetColor("_EmissionColor", new Color(0.43f, 0.4f, 0.34f));
             plaster.EnableKeyword("_EMISSION");
             plaster.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive; // None loses the keyword on reload
             var frame = Lit("SkylightFrame", new Color(0.8f, 0.8f, 0.78f), smoothness: 0.35f, metallic: 0.3f);
             var glass = GlassMaterial();
-            var pane = PaneModel();
+            var pane = Model(PanePath);
+            var door = Model(DoorPath);
+            var doorDark = DoorDepthMaterial();
             AssetDatabase.SaveAssets();
 
             var view = FindImmersive();
@@ -41,13 +48,20 @@ namespace VirtualMuseum.AppEditor
             }
             var so = new SerializedObject(view);
             so.FindProperty("floorMaterial").objectReferenceValue = floor;
+            so.FindProperty("wallMaterial").objectReferenceValue = wall;
             so.FindProperty("floorTextureTile").floatValue = FloorTile;
             so.FindProperty("buildCeilings").boolValue = true;
             var c = so.FindProperty("ceiling");
             c.FindPropertyRelative("plaster").objectReferenceValue = plaster;
+            c.FindPropertyRelative("trim").objectReferenceValue = trim;
             c.FindPropertyRelative("skylightPane").objectReferenceValue = pane;
             c.FindPropertyRelative("glass").objectReferenceValue = glass;
             c.FindPropertyRelative("frame").objectReferenceValue = frame;
+            so.FindProperty("buildDoors").boolValue = true;
+            var d = so.FindProperty("doorStyle");
+            d.FindPropertyRelative("model").objectReferenceValue = door;
+            d.FindPropertyRelative("frame").objectReferenceValue = wall;
+            d.FindPropertyRelative("dark").objectReferenceValue = doorDark;
             so.ApplyModifiedProperties();
             // Skylight lighting while visiting (sun from above, even ambient), workshop lighting restored on leaving.
             if (view.GetComponent<SkylightLighting>() == null) Undo.AddComponent<SkylightLighting>(view.gameObject);
@@ -139,10 +153,10 @@ namespace VirtualMuseum.AppEditor
             return m;
         }
 
-        static GameObject PaneModel()
+        static GameObject Model(string path)
         {
-            var importer = AssetImporter.GetAtPath(PanePath) as ModelImporter;
-            if (importer == null) { Debug.LogError("Museum look: missing " + PanePath); return null; }
+            var importer = AssetImporter.GetAtPath(path) as ModelImporter;
+            if (importer == null) { Debug.LogError("Museum look: missing " + path); return null; }
             if (importer.materialImportMode != ModelImporterMaterialImportMode.None || importer.importAnimation)
             {
                 importer.materialImportMode = ModelImporterMaterialImportMode.None; // materials given by MuseumView
@@ -151,7 +165,31 @@ namespace VirtualMuseum.AppEditor
                 importer.importLights = false;
                 importer.SaveAndReimport();
             }
-            return AssetDatabase.LoadAssetAtPath<GameObject>(PanePath);
+            return AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        }
+
+        // ---------------------------------------------------------------- doors
+
+        /// <summary>Inside of the doors: a passage going on behind the wall into the dark (parquet floor, cream walls).</summary>
+        static Material DoorDepthMaterial()
+        {
+            const string path = Materials + "/DoorDark.mat";
+            var shader = Shader.Find("Museum/DoorDepth");
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null) { m = new Material(shader); AssetDatabase.CreateAsset(m, path); }
+            m.shader = shader;
+            m.SetTexture("_FloorTex", AssetDatabase.LoadAssetAtPath<Texture2D>(Wood + "/WoodFloor_Color.jpg"));
+            m.SetFloat("_FloorTile", FloorTile);
+            // Like the lit room at the threshold, measured on it (linear): its walls, and its floor as
+            // albedo * diffuse + sheen + grazing sheen (sky reflection). Then a short passage, dark quickly.
+            m.SetColor("_WallColor", new Color(0.62f, 0.53f, 0.39f));
+            m.SetColor("_FloorDiffuse", new Color(1.08f, 1.075f, 1.006f));
+            m.SetColor("_FloorSheen", new Color(0.059f, 0.048f, 0.047f));
+            m.SetColor("_FloorFresnel", new Color(0.023f, 0.12f, 0.224f));
+            m.SetFloat("_Depth", 2.5f);
+            m.SetFloat("_Falloff", 2f);
+            EditorUtility.SetDirty(m);
+            return m;
         }
 
         // ---------------------------------------------------------------- materials

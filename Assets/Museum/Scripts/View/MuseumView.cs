@@ -27,6 +27,11 @@ namespace VirtualMuseum.App
         [SerializeField] bool buildCeilings;
         [SerializeField] CeilingStyle ceiling = new();
 
+        [Header("Doors (life-size museum)")]
+        [Tooltip("Arched passages at the connections: walking into one leads to the connected room.")]
+        [SerializeField] bool buildDoors;
+        [SerializeField] DoorStyle doorStyle = new();
+
         [Header("Geometry (museum metres)")]
         [SerializeField] float wallThickness = 0.1f;
         [SerializeField] float lowWallHeight = 0.3f;
@@ -48,7 +53,8 @@ namespace VirtualMuseum.App
         readonly Dictionary<string, RoomView> rooms = new();
         readonly Dictionary<string, LineRenderer> cables = new();
         readonly Dictionary<string, Transform> doors = new(); // "connectionKey#roomId"
-        Transform roomsRoot, cablesRoot;
+        readonly Dictionary<string, DoorPortal> portals = new(); // "connectionKey#roomId"
+        Transform roomsRoot, cablesRoot, portalsRoot;
 
         /// <summary>Raised after every refresh, once all views match the model.</summary>
         public event Action Refreshed;
@@ -58,6 +64,11 @@ namespace VirtualMuseum.App
         /// <summary>Connection lines by <see cref="ConnectionKey"/> (door to door); points are in museum coordinates.</summary>
         public IReadOnlyDictionary<string, LineRenderer> Cables => cables;
         public RoomView GetRoomView(string roomId) => roomId != null && rooms.TryGetValue(roomId, out var rv) ? rv : null;
+        /// <summary>Life-size door of connection <paramref name="connectionKey"/> in room <paramref name="roomId"/> (null if none).</summary>
+        public DoorPortal GetDoor(string connectionKey, string roomId) =>
+            portals.TryGetValue(connectionKey + "#" + roomId, out var p) && p != null ? p : null;
+        /// <summary>Life-size doors, by "connectionKey#roomId".</summary>
+        public IReadOnlyDictionary<string, DoorPortal> Doors => portals;
 
         /// <summary>Stable key for an undirected connection: A-B and B-A give the same key.</summary>
         public static string ConnectionKey(string a, string b) => string.CompareOrdinal(a, b) < 0 ? a + "|" + b : b + "|" + a;
@@ -69,6 +80,7 @@ namespace VirtualMuseum.App
             roomsRoot = CreateChild("Rooms");
             cablesRoot = CreateChild("Connections");
             cablesRoot.gameObject.SetActive(showCables);
+            if (buildDoors) portalsRoot = CreateChild("Doors");
         }
 
         void OnEnable()
@@ -133,6 +145,10 @@ namespace VirtualMuseum.App
             var layout = ConnectionLayout.Compute(data);
             var up = Vector3.up * cableHeight;
             float doorHeight = lowWallHeight + 0.15f;
+            // One size for every life-size door (coherent everywhere): what the lowest room / narrowest slot allows.
+            float doorScale = float.MaxValue;
+            foreach (var (da0, db0) in layout.Values)
+                doorScale = Mathf.Min(doorScale, DoorPortal.ScaleFor(doorStyle, byId[da0.RoomId], da0, byId[db0.RoomId], db0));
             foreach (var pair in layout)
             {
                 var key = pair.Key;
@@ -152,12 +168,23 @@ namespace VirtualMuseum.App
                 line.widthMultiplier = cableWidth * transform.lossyScale.x;
                 PlaceDoor(key, ra, da, doorHeight);
                 PlaceDoor(key, rb, db, doorHeight);
+                if (portalsRoot != null)
+                {
+                    PlacePortal(key, ra, da, rb, doorScale);
+                    PlacePortal(key, rb, db, ra, doorScale);
+                }
             }
             foreach (var key in new List<string>(cables.Keys))
             {
                 if (layout.ContainsKey(key)) continue;
                 if (cables[key] != null) Destroy(cables[key].gameObject);
                 cables.Remove(key);
+            }
+            foreach (var portalKey in new List<string>(portals.Keys))
+            {
+                if (layout.ContainsKey(portalKey.Substring(0, portalKey.LastIndexOf('#')))) continue;
+                if (portals[portalKey] != null) Destroy(portals[portalKey].gameObject);
+                portals.Remove(portalKey);
             }
             foreach (var doorKey in new List<string>(doors.Keys))
             {
@@ -187,6 +214,21 @@ namespace VirtualMuseum.App
             t.localPosition = MuseumSpatial.ToMuseum(room, door.Local) + Vector3.up * (h / 2f);
             t.localRotation = room.rotation * (door.AlongX ? Quaternion.identity : Quaternion.Euler(0f, 90f, 0f));
             t.localScale = new Vector3(door.Width, h, wallThickness * 1.8f);
+        }
+
+        /// <summary>Life-size door: against the inner face of the wall, in the middle of the layout's door slot.</summary>
+        void PlacePortal(string connectionKey, Room room, Door door, Room other, float scale)
+        {
+            var portalKey = connectionKey + "#" + room.id;
+            if (!portals.TryGetValue(portalKey, out var portal) || portal == null)
+            {
+                portal = new GameObject().AddComponent<DoorPortal>();
+                portal.transform.SetParent(portalsRoot, false);
+                portal.Init(this, doorStyle, connectionKey, room.id, other.id);
+                portals[portalKey] = portal;
+            }
+            var innerFace = door.Local - door.Normal * (wallThickness / 2f);
+            portal.Apply(MuseumSpatial.ToMuseum(room, innerFace), room.rotation * Quaternion.LookRotation(door.Normal), scale, other.name, room);
         }
 
         LineRenderer CreateCable(string key)

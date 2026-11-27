@@ -93,24 +93,38 @@ namespace VirtualMuseum.App
         }
 
         /// <summary>
-        /// On the floor, to the viewer's right of the artwork (artworks face their local +Z, like wall-snapped ones),
-        /// slightly in front, kept inside the room. The plate faces the viewer standing in front of the artwork.
+        /// On the floor beside the artwork, on the right of a visitor coming from where they entered the room
+        /// (<see cref="VisitorGuide.ArrivalLocal"/>: elevator platform or door), slightly towards them, kept inside the
+        /// room. The plate turns to face that point, so it reads from where the visitor arrives, whichever way.
         /// </summary>
         void PlaceLabel(Room room)
         {
             var roomSpace = transform.parent; // RoomView's artworks root: same frame as the room
             if (roomSpace == null) return;
-            var rot = transform.localRotation;
-            float yaw = rot.eulerAngles.y;
-            float half = Mathf.Max(LocalBounds.extents.x * transform.localScale.x, 0.15f);
-            // Viewer faces -Z of the artwork, so their right is the artwork's -X.
-            var local = transform.localPosition + Quaternion.Euler(0, yaw, 0) * new Vector3(-(half + 0.45f), 0, 0.35f);
+            var art = transform.localPosition;
+            float yaw = transform.localRotation.eulerAngles.y; // facing the artwork's front (+Z) by default
+            if (room != null)
+            {
+                var toVisitor = guide.ArrivalLocal(room) - art;
+                toVisitor.y = 0f;
+                if (toVisitor.sqrMagnitude > 0.01f) yaw = Mathf.Atan2(toVisitor.x, toVisitor.z) * Mathf.Rad2Deg;
+            }
+            var s = transform.localScale;
+            float half = Mathf.Max(Mathf.Max(LocalBounds.extents.x * s.x, LocalBounds.extents.z * s.z), 0.15f);
+            // Visitor looks along -yaw: their right is -X in that frame.
+            var local = art + Quaternion.Euler(0, yaw, 0) * new Vector3(-(half + 0.45f), 0, 0.35f);
             local.y = 0;
             if (room != null)
             {
                 float hw = Mathf.Max(room.width / 2f - WallClearance, 0f), hl = Mathf.Max(room.length / 2f - WallClearance, 0f);
                 local.x = Mathf.Clamp(local.x, -hw, hw);
                 local.z = Mathf.Clamp(local.z, -hl, hl);
+            }
+            if (room != null) // the plate itself faces the visitor's arrival point
+            {
+                var toVisitor = guide.ArrivalLocal(room) - local;
+                toVisitor.y = 0f;
+                if (toVisitor.sqrMagnitude > 0.01f) yaw = Mathf.Atan2(toVisitor.x, toVisitor.z) * Mathf.Rad2Deg;
             }
             label.SetPositionAndRotation(roomSpace.TransformPoint(local), roomSpace.rotation * Quaternion.Euler(0, yaw + 180f, 0));
         }

@@ -15,6 +15,8 @@ namespace VirtualMuseum.App
     /// </summary>
     public class RoomPlan : MonoBehaviour
     {
+        // Extent of the station (plan, lever, elevator) along its wall, from the plan centre (see MuseumStation).
+        const float StationLeft = 0.8f, StationRight = 1.75f;
         const float BoardWidth = 0.95f, BoardHeight = 0.72f, BoardCenterY = 1.5f, WallHalfThickness = 0.05f;
         static readonly Color HereColor = new Color(0.5f, 0.8f, 1f);
         static readonly Color ConnectedColor = new Color(0.62f, 1f, 0.66f);
@@ -96,12 +98,27 @@ namespace VirtualMuseum.App
                 (n: Vector3.left, half: room.width / 2f, len: room.length),
                 (n: Vector3.right, half: room.width / 2f, len: room.length),
             };
+            // Doors of this room (ConnectionLayout): the plan, its lever and the elevator must not stand in front of one.
+            var doors = new List<Door>();
+            foreach (var pair in ConnectionLayout.Compute(museum).Values)
+            {
+                if (pair.a.RoomId == room.id) doors.Add(pair.a);
+                if (pair.b.RoomId == room.id) doors.Add(pair.b);
+            }
             int best = 0;
             float bestScore = float.MaxValue;
             for (int i = 0; i < walls.Length; i++)
             {
                 var (n, half, len) = walls[i];
                 float score = len < 1.6f ? 100f : 0f;
+                var alongAxis = Vector3.Cross(Vector3.up, n);
+                foreach (var d in doors)
+                {
+                    if (Vector3.Dot(d.Normal, n) < 0.5f) continue;
+                    // station along this wall, from the plan centre: plan on the left, lever + elevator on the right
+                    float along = Vector3.Dot(d.Local, alongAxis), half2 = d.Width / 2f + 0.2f;
+                    if (along + half2 > -StationLeft && along - half2 < StationRight) score += 50f;
+                }
                 foreach (var a in museum.artworks)
                 {
                     if (a.roomId != room.id || a.id == ignoreArtworkId) continue;

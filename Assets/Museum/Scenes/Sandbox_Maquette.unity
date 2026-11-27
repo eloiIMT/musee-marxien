@@ -502,11 +502,20 @@ MonoBehaviour:
   buildCeilings: 0
   ceiling:
     plaster: {fileID: 0}
+    trim: {fileID: 0}
     skylightPane: {fileID: 0}
     glass: {fileID: 0}
     frame: {fileID: 0}
     skylightMargin: 0.22
     wellDepth: 0.45
+  buildDoors: 0
+  doorStyle:
+    model: {fileID: 0}
+    frame: {fileID: 0}
+    dark: {fileID: 0}
+    maxScale: 0.7
+    engraving: {r: 0.1, g: 0.07, b: 0.05, a: 1}
+    engravingLight: {r: 0.62, g: 0.52, b: 0.42, a: 1}
   wallThickness: 0.1
   lowWallHeight: 0.3
   startExpanded: 0
@@ -563,17 +572,26 @@ MonoBehaviour:
   m_EditorClassIdentifier: Museum.App::VirtualMuseum.App.MuseumView
   backend: {fileID: 819444226}
   floorMaterial: {fileID: 2100000, guid: 797f692d8d26b7a4d95d03fd4473670e, type: 2}
-  wallMaterial: {fileID: 2100000, guid: 287427387f3412946b8908d348578813, type: 2}
+  wallMaterial: {fileID: 2100000, guid: ca721dfa48ed674408d5fbd4ac11e9b0, type: 2}
   cableMaterial: {fileID: 2100000, guid: 88df9319ff2646e4c87a070b1e637157, type: 2}
   floorTextureTile: 1.6
   buildCeilings: 1
   ceiling:
     plaster: {fileID: 2100000, guid: e29ef0f6ee4183349b21dd2ae2c0db27, type: 2}
+    trim: {fileID: 2100000, guid: 78a33038b38118c478a7490fd7c14302, type: 2}
     skylightPane: {fileID: 919132149155446097, guid: acb2e6bec878d894992df274807d4095, type: 3}
     glass: {fileID: 2100000, guid: 75294bfc41809a04da18563c4826d67b, type: 2}
     frame: {fileID: 2100000, guid: 2ea6355b713c6cd438570be1db55c4c5, type: 2}
     skylightMargin: 0.22
     wellDepth: 0.45
+  buildDoors: 1
+  doorStyle:
+    model: {fileID: 919132149155446097, guid: ce59ed8eed6ac304c8778c71f7f12d0e, type: 3}
+    frame: {fileID: 2100000, guid: ca721dfa48ed674408d5fbd4ac11e9b0, type: 2}
+    dark: {fileID: 2100000, guid: 2e5eb9f24b66ed748b136d474c4009f9, type: 2}
+    maxScale: 0.7
+    engraving: {r: 0.1, g: 0.07, b: 0.05, a: 1}
+    engravingLight: {r: 0.62, g: 0.52, b: 0.42, a: 1}
   wallThickness: 0.1
   lowWallHeight: 0.3
   startExpanded: 1
@@ -1114,11 +1132,20 @@ MonoBehaviour:
   buildCeilings: 0
   ceiling:
     plaster: {fileID: 0}
+    trim: {fileID: 0}
     skylightPane: {fileID: 0}
     glass: {fileID: 0}
     frame: {fileID: 0}
     skylightMargin: 0.22
     wellDepth: 0.45
+  buildDoors: 0
+  doorStyle:
+    model: {fileID: 0}
+    frame: {fileID: 0}
+    dark: {fileID: 0}
+    maxScale: 0.7
+    engraving: {r: 0.1, g: 0.07, b: 0.05, a: 1}
+    engravingLight: {r: 0.62, g: 0.52, b: 0.42, a: 1}
   wallThickness: 0.1
   lowWallHeight: 0.3
   startExpanded: 0

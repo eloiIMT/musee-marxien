@@ -25,14 +25,15 @@ namespace VirtualMuseum.App
     /// Where the connections between rooms are drawn: each connection gets a door on the wall of each room that
     /// faces the other room — the wall across the axis where the two rooms are apart (side by side: the side walls,
     /// one above the other: the top / bottom walls). When the two rooms share a span along that wall, both doors sit
-    /// in the middle of it, face to face, so the line between them is straight and short. Several doors on the same
-    /// wall keep their place when they fit, otherwise they are pushed apart (in the order of the rooms they lead to)
-    /// so they never overlap. Doors stay away from the corners. Pure computation from the model (nothing stored):
+    /// in the middle of it, face to face, so the line between them is straight and short (rooms sharing a wall: the
+    /// two doors back to back, one passage). Both doors of a connection always have the same width. Several doors on
+    /// one wall keep the order of the rooms they lead to and never overlap (moved along the shared span, or made
+    /// narrower when the wall is too short). Doors stay away from the corners. Pure computation from the model (nothing stored):
     /// unit-testable, identical for every view, recomputed after any change.
     /// </summary>
     public static class ConnectionLayout
     {
-        public const float DoorWidth = 1.2f;
+        public const float DoorWidth = 2.8f; // slot of a life-size arched door (DoorPortal), also drawn on the plans
         const float CornerClearance = 0.4f; // museum metres kept free at each wall end
 
         /// <summary>Doors of every connection, by <see cref="MuseumView.ConnectionKey"/>: (door in room a, door in room b).</summary>
@@ -43,9 +44,9 @@ namespace VirtualMuseum.App
             var byId = new Dictionary<string, Room>();
             foreach (var r in museum.rooms) byId[r.id] = r;
 
-            // 1. Which wall of each room every connection leaves from.
-            var walls = new Dictionary<(string room, int wall), List<(string other, float along)>>();
-            var pairs = new List<(string key, Room a, Room b)>();
+            // 1. Which wall of each room every connection leaves from, and how many doors each wall gets.
+            var conns = new List<(string key, Room a, Room b, End ea, End eb)>();
+            var count = new Dictionary<(string room, int wall), int>();
             var seen = new HashSet<string>();
             foreach (var a in museum.rooms)
             {
@@ -54,43 +55,180 @@ namespace VirtualMuseum.App
                     if (!byId.TryGetValue(otherId, out var b) || a.id == otherId) continue;
                     var key = MuseumView.ConnectionKey(a.id, otherId);
                     if (!seen.Add(key)) continue;
-                    pairs.Add((key, a, b));
-                    AddEnd(walls, a, b);
-                    AddEnd(walls, b, a);
+                    var ea = FacingEnd(a, b);
+                    var eb = FacingEnd(b, a);
+                    conns.Add((key, a, b, ea, eb));
+                    count[(a.id, ea.wall)] = count.TryGetValue((a.id, ea.wall), out var na) ? na + 1 : 1;
+                    count[(b.id, eb.wall)] = count.TryGetValue((b.id, eb.wall), out var nb) ? nb + 1 : 1;
                 }
             }
 
-            // 2. Door positions along each wall.
-            var doors = new Dictionary<(string room, string other), Door>();
-            foreach (var pair in walls)
+            // 2. Both doors of a connection together: same width and, when the rooms share a span along their walls,
+            // the same place on it (face to face); never overlapping another door of either wall. Placed one connection
+            // at a time, by position along the wall (doors keep the rooms' order); tried with the face-to-face
+            // connections first and last, keeping the arrangement with the widest doors (then closest to ideal).
+            int Order(bool faceToFaceFirst, (string key, Room a, Room b, End ea, End eb) p, (string key, Room a, Room b, End ea, End eb) q)
             {
-                var room = byId[pair.Key.room];
-                int wall = pair.Key.wall;
-                var list = pair.Value;
-                list.Sort((p, q) => p.along.CompareTo(q.along));
-                float usable = Mathf.Max(WallLength(room, wall) - 2f * CornerClearance, 0.1f);
-                int n = list.Count;
-                float width = Mathf.Min(DoorWidth, usable / n * 0.75f);
-                var positions = Spread(list.ConvertAll(e => e.along), usable / 2f - width / 2f, width + 0.2f);
-                for (int i = 0; i < n; i++)
-                    doors[(room.id, list[i].other)] = new Door(room.id, list[i].other, WallPoint(room, wall, positions[i]), WallNormal(wall), width);
+                int c = Tight(p.ea, p.eb).CompareTo(Tight(q.ea, q.eb)) * (faceToFaceFirst ? -1 : 1);
+                if (c != 0) return c;
+                c = p.ea.ideal.CompareTo(q.ea.ideal);
+                return c != 0 ? c : string.CompareOrdinal(p.key, q.key);
             }
-
-            foreach (var (key, a, b) in pairs)
-                result[key] = (doors[(a.id, b.id)], doors[(b.id, a.id)]);
+            Dictionary<string, (Door a, Door b)> best = null;
+            float bestWidth = -1f, bestDeviation = float.MaxValue;
+            foreach (bool first in new[] { true, false })
+            {
+                var order = new List<(string key, Room a, Room b, End ea, End eb)>(conns);
+                order.Sort((p, q) => Order(first, p, q));
+                var (layout, minWidth, deviation) = Place(order, count);
+                if (minWidth > bestWidth + 1e-3f || (Mathf.Abs(minWidth - bestWidth) <= 1e-3f && deviation < bestDeviation - 1e-3f))
+                {
+                    best = layout;
+                    bestWidth = minWidth;
+                    bestDeviation = deviation;
+                }
+            }
+            foreach (var pair in best) result[pair.Key] = pair.Value;
             return result;
         }
 
+        /// <summary>Both rooms share a span of wall: their doors can face each other.</summary>
+        static bool Tight(End ea, End eb) => ea.shared && eb.shared && ea.hi - ea.lo >= DoorWidth / 2f;
+
+        static (Dictionary<string, (Door a, Door b)> layout, float minWidth, float deviation) Place(
+            List<(string key, Room a, Room b, End ea, End eb)> order, Dictionary<(string room, int wall), int> count)
+        {
+            var layout = new Dictionary<string, (Door a, Door b)>();
+            var placed = new Dictionary<(string room, int wall), List<(float centre, float half)>>();
+            float minWidth = float.MaxValue, deviation = 0f;
+            foreach (var (key, a, b, ea, eb) in order)
+            {
+                float width = Mathf.Min(WidthOn(a, ea.wall, count[(a.id, ea.wall)]), WidthOn(b, eb.wall, count[(b.id, eb.wall)]));
+                var (pa, pb, w) = PlacePair(a, ea, b, eb, width, placed);
+                Occupy(placed, a.id, ea.wall, pa, w);
+                Occupy(placed, b.id, eb.wall, pb, w);
+                layout[key] = (new Door(a.id, b.id, WallPoint(a, ea.wall, pa), WallNormal(ea.wall), w),
+                               new Door(b.id, a.id, WallPoint(b, eb.wall, pb), WallNormal(eb.wall), w));
+                minWidth = Mathf.Min(minWidth, w);
+                deviation += Mathf.Abs(pa - ea.ideal) + Mathf.Abs(pb - eb.ideal);
+            }
+            return (layout, minWidth, deviation);
+        }
+
+        /// <summary>One end of a connection: its wall, the ideal door position along it, the span shared with the other room.</summary>
+        readonly struct End
+        {
+            public readonly int wall;
+            public readonly float ideal, lo, hi;
+            public readonly bool shared;
+            public End(int wall, float ideal, float lo, float hi, bool shared)
+            { this.wall = wall; this.ideal = ideal; this.lo = lo; this.hi = hi; this.shared = shared; }
+        }
+
+        static float WidthOn(Room room, int wall, int doors)
+        {
+            float usable = Mathf.Max(WallLength(room, wall) - 2f * CornerClearance, 0.1f);
+            return Mathf.Min(DoorWidth, usable / doors * 0.75f);
+        }
+
+        /// <summary>Allowed door centres along a wall: off the corners, and inside the shared span when it is wide enough.</summary>
+        static (float lo, float hi) Range(Room room, End e, float width)
+        {
+            float max = Mathf.Max(WallLength(room, e.wall) / 2f - CornerClearance - width / 2f, 0f);
+            float lo = -max, hi = max;
+            if (e.shared && e.hi - e.lo >= width)
+            {
+                lo = Mathf.Max(lo, e.lo + width / 2f);
+                hi = Mathf.Min(hi, e.hi - width / 2f);
+            }
+            if (lo <= hi) return (lo, hi);
+            float c = Mathf.Clamp(e.ideal, -max, max);
+            return (c, c);
+        }
+
+        /// <summary>Door centres (along each wall) and width for a connection; shrinks the doors when they cannot fit.</summary>
+        static (float a, float b, float width) PlacePair(Room a, End ea, Room b, End eb, float width,
+                                                          Dictionary<(string room, int wall), List<(float centre, float half)>> placed)
+        {
+            // Position along b's wall of the point at position x along a's wall (linear: f0 + k x).
+            float Map(float x)
+            {
+                var p = MuseumSpatial.ToRoom(b, MuseumSpatial.ToMuseum(a, WallPoint(a, ea.wall, x)));
+                return eb.wall <= 1 ? p.x : p.z;
+            }
+            float f0 = Map(0f), k = Map(1f) - f0;
+            bool parallel = Mathf.Abs(k) > 0.7f;
+            var occA = Occupied(placed, a.id, ea.wall);
+            var occB = Occupied(placed, b.id, eb.wall);
+
+            for (int attempt = 0; attempt < 5; attempt++, width *= 0.8f)
+            {
+                var (alo, ahi) = Range(a, ea, width);
+                var (blo, bhi) = Range(b, eb, width);
+                float w = width;
+                if (parallel)
+                {
+                    // b's range seen from a: the same place on both walls (face to face)
+                    float x0 = (blo - f0) / k, x1 = (bhi - f0) / k;
+                    float lo = Mathf.Max(alo, Mathf.Min(x0, x1)), hi = Mathf.Min(ahi, Mathf.Max(x0, x1));
+                    if (lo <= hi && Search(ea.ideal, lo, hi, x => Free(occA, x, w) && Free(occB, f0 + k * x, w), out var x))
+                        return (x, f0 + k * x, w);
+                }
+                // not face to face (rooms barely touching, or turned): each door on its own wall
+                if (Search(ea.ideal, alo, ahi, x => Free(occA, x, w), out var pa) &&
+                    Search(eb.ideal, blo, bhi, x => Free(occB, x, w), out var pb))
+                    return (pa, pb, w);
+            }
+            var (l, h) = Range(a, ea, width);
+            var (bl, bh) = Range(b, eb, width);
+            return (Mathf.Clamp(ea.ideal, l, h), Mathf.Clamp(eb.ideal, bl, bh), width);
+        }
+
+        /// <summary>Nearest position to <paramref name="ideal"/> within [lo, hi] (5 cm steps) passing <paramref name="ok"/>.</summary>
+        static bool Search(float ideal, float lo, float hi, System.Func<float, bool> ok, out float x)
+        {
+            float start = Mathf.Clamp(ideal, lo, hi);
+            for (int i = 0; ; i++)
+            {
+                float d = i * 0.05f;
+                bool inside = false;
+                if (start + d <= hi + 1e-4f)
+                {
+                    inside = true;
+                    x = Mathf.Min(start + d, hi);
+                    if (ok(x)) return true;
+                }
+                if (i > 0 && start - d >= lo - 1e-4f)
+                {
+                    inside = true;
+                    x = Mathf.Max(start - d, lo);
+                    if (ok(x)) return true;
+                }
+                if (!inside) { x = start; return false; }
+            }
+        }
+
+        const float DoorGap = 0.2f; // between two doors on one wall
+
+        static bool Free(List<(float centre, float half)> occupied, float x, float width)
+        {
+            foreach (var (c, h) in occupied)
+                if (Mathf.Abs(x - c) < h + width / 2f + DoorGap - 1e-4f) return false;
+            return true;
+        }
+
+        static List<(float centre, float half)> Occupied(Dictionary<(string room, int wall), List<(float centre, float half)>> placed,
+                                                         string room, int wall)
+        {
+            if (!placed.TryGetValue((room, wall), out var list)) placed[(room, wall)] = list = new List<(float centre, float half)>();
+            return list;
+        }
+
+        static void Occupy(Dictionary<(string room, int wall), List<(float centre, float half)>> placed, string room, int wall,
+                           float centre, float width) => Occupied(placed, room, wall).Add((centre, width / 2f));
+
         /// <summary>Museum-space middle of a door, at floor level.</summary>
         public static Vector3 ToMuseum(Room room, Door door) => MuseumSpatial.ToMuseum(room, door.Local);
-
-        static void AddEnd(Dictionary<(string, int), List<(string, float)>> walls, Room room, Room other)
-        {
-            var (wall, along) = FacingWall(room, other);
-            var k = (room.id, wall);
-            if (!walls.TryGetValue(k, out var list)) walls[k] = list = new List<(string, float)>();
-            list.Add((other.id, along));
-        }
 
         /// <summary>
         /// Wall of <paramref name="room"/> facing <paramref name="other"/> (0 = +Z north, 1 = -Z south, 2 = +X east,
@@ -98,6 +236,12 @@ namespace VirtualMuseum.App
         /// along that wall, or in front of the other room's centre when they share none.
         /// </summary>
         public static (int wall, float along) FacingWall(Room room, Room other)
+        {
+            var e = FacingEnd(room, other);
+            return (e.wall, e.ideal);
+        }
+
+        static End FacingEnd(Room room, Room other)
         {
             // The other room's footprint in this room's frame.
             float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
@@ -113,31 +257,10 @@ namespace VirtualMuseum.App
             {
                 // Apart along X: east / west wall, door in the middle of the shared Z span.
                 float lo = Mathf.Max(z0, -hl), hi = Mathf.Min(z1, hl);
-                return (centre.x >= 0 ? 2 : 3, lo <= hi ? (lo + hi) / 2f : centre.z);
+                return new End(centre.x >= 0 ? 2 : 3, lo <= hi ? (lo + hi) / 2f : centre.z, lo, hi, lo <= hi);
             }
             float a = Mathf.Max(x0, -hw), b = Mathf.Min(x1, hw);
-            return (centre.z >= 0 ? 0 : 1, a <= b ? (a + b) / 2f : centre.x);
-        }
-
-        /// <summary>
-        /// Final positions of doors along one wall, from their sorted ideal positions: clamped to ±<paramref name="max"/>,
-        /// then pushed apart to <paramref name="gap"/>; evenly spread if they cannot all fit.
-        /// </summary>
-        static float[] Spread(List<float> ideal, float max, float gap)
-        {
-            int n = ideal.Count;
-            var p = new float[n];
-            if (max < 0f) max = 0f;
-            if (n > 1 && gap * (n - 1) > 2f * max)
-            {
-                for (int i = 0; i < n; i++) p[i] = -max + 2f * max * i / (n - 1);
-                return p;
-            }
-            for (int i = 0; i < n; i++) p[i] = Mathf.Clamp(ideal[i], -max, max);
-            for (int i = 1; i < n; i++) p[i] = Mathf.Max(p[i], p[i - 1] + gap);       // push right
-            if (n > 0 && p[n - 1] > max) p[n - 1] = max;
-            for (int i = n - 2; i >= 0; i--) p[i] = Mathf.Min(p[i], p[i + 1] - gap);   // push back left
-            return p;
+            return new End(centre.z >= 0 ? 0 : 1, a <= b ? (a + b) / 2f : centre.x, a, b, a <= b);
         }
 
         static float WallLength(Room room, int wall) => wall <= 1 ? room.width : room.length;

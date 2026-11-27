@@ -189,6 +189,7 @@ namespace VirtualMuseum.App
             }
             bool reserved = MuseumStation.IsReserved(targetRoom, museum, local);
             if (reason == null && reserved) reason = MuseumStation.ReservedReason;
+            if (reason == null && MuseumStation.InFrontOfDoor(targetRoom, museum, local)) reason = MuseumStation.DoorReason;
             maquette.ShowReservedZone(reserved ? targetRoom.id : null); // the no-go area shows only while aimed at
 
             var center = MuseumSpatial.ToMuseum(targetRoom, new Vector3(local.x, 0f, local.z));

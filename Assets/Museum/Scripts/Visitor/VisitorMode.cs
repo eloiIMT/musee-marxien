@@ -130,6 +130,21 @@ namespace VirtualMuseum.App
             }));
         }
 
+        /// <summary>
+        /// Walked into a door (<see cref="DoorPortal"/>): short fade, then in <paramref name="roomId"/> at
+        /// <paramref name="feetWorld"/>, in front of the matching door, looking along <paramref name="forward"/>.
+        /// </summary>
+        public void TeleportThroughDoor(string roomId, Vector3 feetWorld, Vector3 forward)
+        {
+            if (Busy || Mode != AppMode.Visitor || Api.GetRoom(roomId) == null) return;
+            Sounds.Play(Sounds.Whoosh, 0.25f);
+            StartCoroutine(QuickTransition(() =>
+            {
+                Guide?.OnArrived(roomId, immersive.transform.InverseTransformPoint(feetWorld));
+                MoveRig(feetWorld, forward);
+            }));
+        }
+
         // ---------------------------------------------------------------- helpers
 
         IEnumerator QuickTransition(Action swap)
