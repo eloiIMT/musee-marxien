@@ -73,6 +73,9 @@ namespace VirtualMuseum.App
             move = Rig != null ? Rig.GetComponentInChildren<DynamicMoveProvider>(true) : null;
             if (move != null) { savedDirection = move.leftHandMovementDirection; savedSpeed = move.moveSpeed; }
             ApplyVisibility(AppMode.Organizer);
+            // The session starts from the example museum (no save is loaded): its artworks face the wall plan, like the
+            // ones placed from the gacha, so the visitor arriving by the elevator sees their fronts and labels.
+            MuseumStation.TurnArtworksToPlan(Api);
         }
 
         // ---------------------------------------------------------------- mode changes (driven by the elevator)
@@ -110,18 +113,20 @@ namespace VirtualMuseum.App
 
         // ---------------------------------------------------------------- room to room
 
-        /// <summary>Teleport to the centre of a room, facing the room we come from (short fade).</summary>
+        /// <summary>
+        /// Teleport to a room (short fade): on its elevator platform, in front of the wall plan, facing into the room,
+        /// exactly where the elevator brings the visitor (<see cref="ElevatorRide"/>).
+        /// </summary>
         public void TeleportToRoom(string roomId, string fromRoomId)
         {
             if (Busy || Mode != AppMode.Visitor) return;
             var data = Api.Data;
             var room = data.rooms.Find(r => r.id == roomId);
             if (room == null) return;
-            var from = data.rooms.Find(r => r.id == fromRoomId);
             StartCoroutine(QuickTransition(() =>
             {
-                PlaceInRoom(room, from != null ? from.position : PlanFacingPoint(room));
-                Guide?.OnArrived(room.id);
+                Guide?.OnArrived(room.id); // moves the elevator station (and its floor opening) to this room
+                PlaceOnStation(room, data);
             }));
         }
 
@@ -160,6 +165,15 @@ namespace VirtualMuseum.App
         {
             var (centre, _, _) = RoomPlan.ChooseWall(room, Api.Data);
             return centre;
+        }
+
+        /// <summary>Feet on the room's elevator platform (<see cref="MuseumStation"/>), back to the plan wall.</summary>
+        void PlaceOnStation(Room room, Museum data)
+        {
+            var station = MuseumStation.Compute(room, data);
+            var root = immersive.transform;
+            var feet = root.TransformPoint(MuseumSpatial.ToMuseum(room, new Vector3(station.spot.x, 0f, station.spot.y)));
+            MoveRig(feet, root.TransformDirection(room.rotation * -station.normal));
         }
 
         /// <summary>Put the user's feet at the centre of a room, looking towards a museum-space point.</summary>

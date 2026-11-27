@@ -19,6 +19,13 @@ namespace VirtualMuseum.App
         [SerializeField] Material floorMaterial;
         [SerializeField] Material wallMaterial;
         [SerializeField] Material cableMaterial;
+        [Tooltip("Metres per repeat of the floor material's texture (0 = stretched over each room).")]
+        [SerializeField] float floorTextureTile;
+
+        [Header("Ceiling (life-size museum)")]
+        [Tooltip("Moulded ceiling with a frosted skylight letting daylight in. Off on the miniature.")]
+        [SerializeField] bool buildCeilings;
+        [SerializeField] CeilingStyle ceiling = new();
 
         [Header("Geometry (museum metres)")]
         [SerializeField] float wallThickness = 0.1f;
@@ -99,6 +106,8 @@ namespace VirtualMuseum.App
                     rv.transform.SetParent(roomsRoot, false);
                     rv.Init(room.id, floorMaterial, wallMaterial, wallThickness, lowWallHeight, wallColliders, labelHeight);
                     rv.Expanded = startExpanded;
+                    rv.SetFloorTextureTile(floorTextureTile);
+                    if (buildCeilings) rv.EnableCeiling(ceiling);
                     rv.ShowWarnings = showArtworkWarnings;
                     rooms[room.id] = rv;
                 }

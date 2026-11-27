@@ -13,7 +13,8 @@ namespace VirtualMuseum.App
     /// again. Also drives the miniatures taken from the bin (<see cref="TakeFromBin"/>), which go back to it when not
     /// placed.
     ///  - any room of the plan, the room then gets selected so the new artwork shows in 3D
-    ///  - turning the wrist rotates it by 15°; within 0.5 m of a wall it snaps to the wall, facing into the room
+    ///  - it faces the room's wall plan by default (where the visitor arrives, <see cref="MuseumStation"/>); turning the
+    ///    wrist from there rotates it by 15° steps; within 0.5 m of a wall it snaps to the wall, facing into the room
     ///  - closer than 0.8 m to another artwork = red, release keeps the capsule in the hand's world
     /// </summary>
     [RequireComponent(typeof(XRGrabInteractable))]
@@ -39,6 +40,7 @@ namespace VirtualMuseum.App
         Vector3 local;
         float localYaw;
         string reason;
+        float grabTwist; // wrist twist when grabbed: the artwork turns by the twist since then
 
         public ArtworkDefinition Definition => definition;
 
@@ -116,10 +118,21 @@ namespace VirtualMuseum.App
             return bounds;
         }
 
-        void OnEnable() => grab.selectExited.AddListener(OnReleased);
+        void OnEnable()
+        {
+            grab.selectEntered.AddListener(OnGrabbed);
+            grab.selectExited.AddListener(OnReleased);
+        }
+
+        void OnGrabbed(SelectEnterEventArgs args)
+        {
+            if (maquette == null) maquette = FindAnyObjectByType<Maquette>();
+            grabTwist = maquette != null ? maquette.HandTwist(transform.rotation) : 0f;
+        }
 
         void OnDisable()
         {
+            grab.selectEntered.RemoveListener(OnGrabbed);
             grab.selectExited.RemoveListener(OnReleased);
             HideGhost();
         }
@@ -164,7 +177,8 @@ namespace VirtualMuseum.App
             local = MuseumSpatial.ToRoom(targetRoom, point);
             local.y = ArtworkHeight;
             if (!MuseumGeometry.SnapToWall(targetRoom.width, targetRoom.length, ref local, out localYaw))
-                localYaw = MuseumGeometry.SnapAngle(maquette.HandTwist(transform.rotation));
+                localYaw = MuseumGeometry.SnapAngle(MuseumStation.FacePlanYaw(targetRoom, museum, local)
+                                                    + Mathf.DeltaAngle(grabTwist, maquette.HandTwist(transform.rotation)));
 
             foreach (var other in museum.artworks)
             {

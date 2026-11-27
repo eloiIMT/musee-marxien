@@ -71,6 +71,40 @@ namespace VirtualMuseum.App
         public static bool IsReserved(Room room, Museum museum, Vector3 local, string ignoreArtworkId = null) =>
             IsReserved(Compute(room, museum, DefaultRadius, ignoreArtworkId), local);
 
+        /// <summary>
+        /// Room-local yaw turning an artwork at <paramref name="local"/> to face the room's wall plan (artworks face their
+        /// local +Z): its front, and its label, are then seen by the visitor arriving by the elevator in front of the plan.
+        /// </summary>
+        public static float FacePlanYaw(Room room, Museum museum, Vector3 local)
+        {
+            var d = Compute(room, museum).wallCentre - local;
+            d.y = 0f;
+            return d.sqrMagnitude < 1e-6f ? 0f : Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg;
+        }
+
+        /// <summary>
+        /// Turn every free-standing artwork (not against a wall, <see cref="MuseumGeometry.SnapToWall"/>) to face its
+        /// room's wall plan, in <see cref="MuseumGeometry.AngleStep"/> steps. Wall artworks keep facing into the room.
+        /// Returns how many artworks turned.
+        /// </summary>
+        public static int TurnArtworksToPlan(MuseumApi api)
+        {
+            var museum = api.Data;
+            int turned = 0;
+            foreach (var art in museum.artworks)
+            {
+                var room = museum.rooms.Find(r => r.id == art.roomId);
+                if (room == null) continue;
+                var probe = art.localPosition;
+                if (MuseumGeometry.SnapToWall(room.width, room.length, ref probe, out _)) continue;
+                float yaw = MuseumGeometry.SnapAngle(FacePlanYaw(room, museum, art.localPosition));
+                if (Mathf.Abs(Mathf.DeltaAngle(MuseumGeometry.Yaw(art.localRotation), yaw)) < 0.5f) continue;
+                api.SetArtworkTransform(art.id, art.localPosition, Quaternion.Euler(0f, yaw, 0f), art.localScale);
+                turned++;
+            }
+            return turned;
+        }
+
         public const string ReservedReason = "Devant le plan / levier : gardez la place libre";
     }
 }

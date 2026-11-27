@@ -21,6 +21,8 @@ namespace VirtualMuseum.App
 
         Transform floor, wallN, wallS, wallE, wallW, artworksRoot;
         Transform[] holeParts;   // floor around the elevator opening (immersive museum only)
+        float floorTile;         // metres per repeat of the floor texture; 0 = material's own tiling
+        RoomCeiling ceiling;     // life-size museum only
         float holeHalf;
         Vector2 holeCentre;
         TextMesh label;
@@ -203,6 +205,26 @@ namespace VirtualMuseum.App
             Layout();
         }
 
+        /// <summary>
+        /// Repeat the floor material's texture every <paramref name="metres"/> metres, whatever the room's size (the
+        /// floor is a scaled cube); 0 keeps the material's tiling.
+        /// </summary>
+        public void SetFloorTextureTile(float metres)
+        {
+            floorTile = Mathf.Max(0f, metres);
+            Layout();
+        }
+
+        /// <summary>Give the room a moulded ceiling with a skylight (life-size museum); shown while expanded.</summary>
+        public void EnableCeiling(CeilingStyle style)
+        {
+            if (ceiling != null || style == null) return;
+            ceiling = new GameObject("Plafond").AddComponent<RoomCeiling>();
+            ceiling.transform.SetParent(transform, false);
+            ceiling.Init(style);
+            Layout();
+        }
+
         /// <summary>Replace the walls' material (e.g. translucent on the miniature); they then cast no shadow.</summary>
         public void SetWallMaterial(Material material)
         {
@@ -259,7 +281,7 @@ namespace VirtualMuseum.App
             float w = Data.width, l = Data.length, e = wallThickness;
             float h = expanded ? Data.height : Mathf.Min(lowWallHeight, Data.height);
 
-            Place(floor, new Vector3(0, -FloorThickness / 2, 0), new Vector3(w, FloorThickness, l));
+            PlaceFloor(floor, new Vector3(0, -FloorThickness / 2, 0), new Vector3(w, FloorThickness, l));
             if (holeHalf > 0f && holeParts != null)
             {
                 // opening [x0, x1] x [z0, z1], kept inside the floor
@@ -267,20 +289,31 @@ namespace VirtualMuseum.App
                 float cx = Mathf.Clamp(holeCentre.x, -w / 2f + s + 0.05f, w / 2f - s - 0.05f);
                 float cz = Mathf.Clamp(holeCentre.y, -l / 2f + s + 0.05f, l / 2f - s - 0.05f);
                 float x0 = cx - s, x1 = cx + s, z0 = cz - s, z1 = cz + s;
-                Place(holeParts[0], new Vector3((-w / 2f + x0) / 2f, y, 0), new Vector3(x0 + w / 2f, FloorThickness, l));
-                Place(holeParts[1], new Vector3((x1 + w / 2f) / 2f, y, 0), new Vector3(w / 2f - x1, FloorThickness, l));
-                Place(holeParts[2], new Vector3(cx, y, (z1 + l / 2f) / 2f), new Vector3(2f * s, FloorThickness, l / 2f - z1));
-                Place(holeParts[3], new Vector3(cx, y, (-l / 2f + z0) / 2f), new Vector3(2f * s, FloorThickness, z0 + l / 2f));
+                PlaceFloor(holeParts[0], new Vector3((-w / 2f + x0) / 2f, y, 0), new Vector3(x0 + w / 2f, FloorThickness, l));
+                PlaceFloor(holeParts[1], new Vector3((x1 + w / 2f) / 2f, y, 0), new Vector3(w / 2f - x1, FloorThickness, l));
+                PlaceFloor(holeParts[2], new Vector3(cx, y, (z1 + l / 2f) / 2f), new Vector3(2f * s, FloorThickness, l / 2f - z1));
+                PlaceFloor(holeParts[3], new Vector3(cx, y, (-l / 2f + z0) / 2f), new Vector3(2f * s, FloorThickness, z0 + l / 2f));
             }
             Place(wallN, new Vector3(0, h / 2, l / 2), new Vector3(w + e, h, e));
             Place(wallS, new Vector3(0, h / 2, -l / 2), new Vector3(w + e, h, e));
             Place(wallE, new Vector3(w / 2, h / 2, 0), new Vector3(e, h, l + e));
             Place(wallW, new Vector3(-w / 2, h / 2, 0), new Vector3(e, h, l + e));
+            if (ceiling != null)
+            {
+                ceiling.gameObject.SetActive(expanded);
+                if (expanded) ceiling.Build(w - e, l - e, h);
+            }
             if (label != null)
             {
                 label.transform.localPosition = new Vector3(0, h + 0.8f, 0);
                 Labels.SetWorldHeight(label, labelHeight);
             }
+        }
+
+        void PlaceFloor(Transform t, Vector3 localPosition, Vector3 size)
+        {
+            Place(t, localPosition, size);
+            if (floorTile > 0f) Tint.SetTiling(t.GetComponent<Renderer>(), localPosition, size, floorTile);
         }
 
         static void Place(Transform t, Vector3 localPosition, Vector3 size)

@@ -19,9 +19,34 @@ namespace VirtualMuseum.App
             r.SetPropertyBlock(block);
         }
 
+        /// <summary>Removes the colour override; a texture tiling set by <see cref="SetTiling"/> is kept.</summary>
         public static void Clear(Renderer r)
         {
-            if (r != null) r.SetPropertyBlock(null);
+            if (r == null) return;
+            block ??= new MaterialPropertyBlock();
+            r.GetPropertyBlock(block);
+            bool tiled = block.HasVector(BaseMapST);
+            var st = tiled ? block.GetVector(BaseMapST) : Vector4.zero;
+            block.Clear();
+            if (tiled) block.SetVector(BaseMapST, st);
+            r.SetPropertyBlock(tiled ? block : null);
+        }
+
+        static readonly int BaseMapST = Shader.PropertyToID("_BaseMap_ST");
+
+        /// <summary>
+        /// World-scaled texture on the top face of a scaled built-in cube (floor slab): one texture repeat every
+        /// <paramref name="tile"/> metres, continuous between slabs of the same room. The built-in cube's top face maps
+        /// u = 0.5 - x, v = 0.5 - z.
+        /// </summary>
+        public static void SetTiling(Renderer r, Vector3 centre, Vector3 size, float tile)
+        {
+            if (r == null || tile <= 0f) return;
+            block ??= new MaterialPropertyBlock();
+            r.GetPropertyBlock(block);
+            block.SetVector(BaseMapST, new Vector4(size.x / tile, size.z / tile,
+                                                   -(centre.x + size.x / 2f) / tile, -(centre.z + size.z / 2f) / tile));
+            r.SetPropertyBlock(block);
         }
     }
 
